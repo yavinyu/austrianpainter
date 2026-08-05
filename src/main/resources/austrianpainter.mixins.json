@@ -7,7 +7,8 @@
   ],
   "client": [
     "client.EntityMixin",
-    "client.LevelEventHandlerMixin"
+    "client.LevelEventHandlerMixin",
+    "client.MouseHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
