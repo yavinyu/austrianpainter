@@ -1,5 +1,6 @@
 package com.maxisch.client
 
+import com.maxisch.paint.ApSettings
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.context.CommandContext
@@ -59,6 +60,7 @@ object PaintCommands {
                                 IntegerArgumentType.integer(PaintBrush.MIN_RADIUS, PaintBrush.MAX_RADIUS),
                             ).executes { context ->
                                 PaintBrush.radius = IntegerArgumentType.getInteger(context, "size")
+                                ApSettings.save()
                                 feedback(
                                     context.source,
                                     "austrianpainter.brush.radius",
@@ -71,10 +73,11 @@ object PaintCommands {
                         ClientCommands.literal("sound").then(
                             ClientCommands.argument("enabled", BoolArgumentType.bool())
                                 .executes { context ->
-                                    PaintBrush.paintSound = BoolArgumentType.getBool(context, "enabled")
+                                    ApSettings.paintSound = BoolArgumentType.getBool(context, "enabled")
+                                    ApSettings.save()
                                     feedback(
                                         context.source,
-                                        if (PaintBrush.paintSound) {
+                                        if (ApSettings.paintSound) {
                                             "austrianpainter.sound.on"
                                         } else {
                                             "austrianpainter.sound.off"

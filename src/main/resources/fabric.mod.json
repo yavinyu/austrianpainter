@@ -15,6 +15,9 @@
     ],
     "client": [
       "com.maxisch.client.AustrianpainterClient"
+    ],
+    "modmenu": [
+      "com.maxisch.client.ApModMenu"
     ]
   },
   "mixins": [
@@ -24,6 +27,10 @@
     "fabricloader": ">=${loader_version}",
     "fabric-language-kotlin": ">=${kotlin_loader_version}",
     "fabric-api": "*",
+    "yet_another_config_lib_v3": "*",
     "minecraft": "${minecraft_version}"
+  },
+  "suggests": {
+    "modmenu": "*"
   }
 }
