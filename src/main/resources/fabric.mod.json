@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "austrianpainter",
+  "version": "${version}",
+  "name": "austrianpainter",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/austrianpainter/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "com.maxisch.client.AustrianpainterDataGenerator"
+    ],
+    "client": [
+      "com.maxisch.client.AustrianpainterClient"
+    ],
+    "main": [
+      "com.maxisch.Austrianpainter"
+    ]
+  },
+  "mixins": [
+    "austrianpainter.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-language-kotlin": ">=${kotlin_loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
