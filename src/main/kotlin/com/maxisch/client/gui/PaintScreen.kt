@@ -1,5 +1,6 @@
 package com.maxisch.client.gui
 
+import com.maxisch.client.PaintBrush
 import com.maxisch.client.PaintSelection
 import com.maxisch.paint.PaintRule
 import com.maxisch.paint.PaintStorage
@@ -42,6 +43,7 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
 
     private lateinit var search: EditBox
     private lateinit var soundButton: Button
+    private lateinit var brushButton: Button
     private lateinit var applyButton: Button
 
     private val gridX get() = PANEL_MARGIN
@@ -80,8 +82,16 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
         soundButton = addRenderableWidget(
             Button.builder(soundLabel()) {
                 PaintSelection.paintSound = !PaintSelection.paintSound
+                PaintBrush.paintSound = PaintSelection.paintSound
                 soundButton.message = soundLabel()
             }.bounds(x, height - FOOTER + 6, 96, 20).build(),
+        )
+
+        brushButton = addRenderableWidget(
+            Button.builder(brushLabel()) {
+                PaintBrush.enabled = !PaintBrush.enabled
+                brushButton.message = brushLabel()
+            }.bounds(x + 100, height - FOOTER + 6, 110, 20).build(),
         )
 
         applyButton = addRenderableWidget(
@@ -106,6 +116,11 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
 
     private fun soundLabel(): Component = Component.translatable(
         if (PaintSelection.paintSound) "austrianpainter.sound.on" else "austrianpainter.sound.off",
+    )
+
+    private fun brushLabel(): Component = Component.translatable(
+        if (PaintBrush.enabled) "austrianpainter.brush.button_on" else "austrianpainter.brush.button_off",
+        PaintBrush.radius,
     )
 
     private fun refreshButtons() {
@@ -157,6 +172,8 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
 
         blockAt(event.x, event.y)?.let {
             PaintSelection.target = it
+            // Picking here also arms the brush, so the fast path needs no second trip.
+            PaintBrush.donor = it
             refreshButtons()
             return true
         }

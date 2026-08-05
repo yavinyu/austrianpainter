@@ -16,6 +16,8 @@ class AustrianpainterClient : ClientModInitializer {
     override fun onInitializeClient() {
         ModelLoadingPlugin.register(PaintModelPlugin)
         PaintKeys.register()
+        PaintCommands.register()
+        PaintHud.register()
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             lastDimension = null

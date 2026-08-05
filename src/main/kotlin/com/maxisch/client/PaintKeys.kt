@@ -1,34 +1,44 @@
 package com.maxisch.client
 
 import com.maxisch.client.gui.PaintScreen
+import com.maxisch.paint.PaintStorage
 import com.mojang.blaze3d.platform.InputConstants
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
+import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import org.lwjgl.glfw.GLFW
 
 /**
- * Keybinds are deliberately raycast-only: marking a corner never touches the block and never sends
- * a packet, so the mod stays invisible to any server.
+ * Keybinds are deliberately raycast-only: painting never touches the block and never sends a
+ * packet, so the mod stays invisible to any server.
  */
 object PaintKeys {
 
     private val CATEGORY = KeyMapping.Category.register(Identifier.parse("austrianpainter:main"))
 
     private lateinit var openMenu: KeyMapping
+    private lateinit var brushPaint: KeyMapping
+    private lateinit var brushErase: KeyMapping
     private lateinit var corner1: KeyMapping
     private lateinit var corner2: KeyMapping
 
     fun register() {
         openMenu = bind("key.austrianpainter.open", GLFW.GLFW_KEY_P)
+        brushPaint = bind("key.austrianpainter.brush_paint", GLFW.GLFW_KEY_G)
+        brushErase = bind("key.austrianpainter.brush_erase", GLFW.GLFW_KEY_H)
         corner1 = bind("key.austrianpainter.corner1", GLFW.GLFW_KEY_LEFT_BRACKET)
         corner2 = bind("key.austrianpainter.corner2", GLFW.GLFW_KEY_RIGHT_BRACKET)
 
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
     }
+
+    /** True while the paint key is held; the scroll hook uses this to resize the brush. */
+    @JvmStatic
+    fun isBrushKeyDown(): Boolean = ::brushPaint.isInitialized && brushPaint.isDown
 
     private fun bind(translationKey: String, key: Int): KeyMapping =
         KeyMappingHelper.registerKeyMapping(
@@ -38,23 +48,63 @@ object PaintKeys {
     private fun tick(client: Minecraft) {
         while (corner1.consumeClick()) markCorner(client, first = true)
         while (corner2.consumeClick()) markCorner(client, first = false)
+        while (brushPaint.consumeClick()) stroke(client, paint = true)
+        while (brushErase.consumeClick()) stroke(client, paint = false)
         while (openMenu.consumeClick()) {
             if (client.level != null) client.setScreenAndShow(PaintScreen())
         }
     }
 
+    // ---------------------------------------------------------------- brush
+
+    private fun stroke(client: Minecraft, paint: Boolean) {
+        val level = client.level ?: return
+
+        if (!PaintBrush.enabled) {
+            tell(client, Component.translatable("austrianpainter.brush.disabled"))
+            return
+        }
+
+        val center = PaintSelection.lookedAtPos() ?: run {
+            tell(client, Component.translatable("austrianpainter.corner.miss"))
+            return
+        }
+
+        // Air has no model to repaint, so leave it out of the stroke entirely.
+        val positions = PaintBrush.cubeAround(center).filterNot { level.getBlockState(it).isAir }
+        if (positions.isEmpty()) return
+
+        if (paint) {
+            val donor = PaintBrush.donor ?: run {
+                tell(client, Component.translatable("austrianpainter.brush.no_donor"))
+                return
+            }
+            val count = PaintStorage.paintPositions(positions, donor, PaintBrush.paintSound)
+            tell(client, Component.translatable("austrianpainter.brush.painted", count, donor.name))
+        } else {
+            val count = PaintStorage.unpaintPositions(positions)
+            tell(client, Component.translatable("austrianpainter.brush.erased", count))
+        }
+    }
+
+    // ---------------------------------------------------------------- region corners
+
     private fun markCorner(client: Minecraft, first: Boolean) {
         val pos = PaintSelection.lookedAtPos() ?: run {
-            client.player?.sendSystemMessage(Component.translatable("austrianpainter.corner.miss"))
+            tell(client, Component.translatable("austrianpainter.corner.miss"))
             return
         }
         if (first) PaintSelection.corner1 = pos else PaintSelection.corner2 = pos
         PaintSelection.mode = PaintSelection.Mode.REGION
-        client.player?.sendSystemMessage(
-            Component.translatable(
-                if (first) "austrianpainter.corner.first" else "austrianpainter.corner.second",
-                pos.x, pos.y, pos.z,
-            ),
-        )
+        tell(client, cornerMessage(first, pos))
+    }
+
+    private fun cornerMessage(first: Boolean, pos: BlockPos): Component = Component.translatable(
+        if (first) "austrianpainter.corner.first" else "austrianpainter.corner.second",
+        pos.x, pos.y, pos.z,
+    )
+
+    private fun tell(client: Minecraft, message: Component) {
+        client.player?.sendSystemMessage(message)
     }
 }
