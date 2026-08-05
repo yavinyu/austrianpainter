@@ -1,6 +1,8 @@
 {
   "key.categories.austrianpainter.main": "Austrian Painter",
   "key.austrianpainter.open": "Open paint menu",
+  "key.austrianpainter.brush_paint": "Brush: paint",
+  "key.austrianpainter.brush_erase": "Brush: erase",
   "key.austrianpainter.corner1": "Mark region corner 1",
   "key.austrianpainter.corner2": "Mark region corner 2",
 
@@ -32,5 +34,20 @@
 
   "austrianpainter.corner.miss": "Not looking at a block",
   "austrianpainter.corner.first": "Corner 1: %s, %s, %s",
-  "austrianpainter.corner.second": "Corner 2: %s, %s, %s"
+  "austrianpainter.corner.second": "Corner 2: %s, %s, %s",
+
+  "austrianpainter.brush.on": "on",
+  "austrianpainter.brush.off": "Brush off",
+  "austrianpainter.brush.button_on": "Brush: on (r%s)",
+  "austrianpainter.brush.button_off": "Brush: off",
+  "austrianpainter.brush.disabled": "Brush is off. Use /paintbrush on",
+  "austrianpainter.brush.no_donor": "no donor",
+  "austrianpainter.brush.unknown_block": "Unknown block: %s",
+  "austrianpainter.brush.status": "Brush %s, donor %s, radius %s",
+  "austrianpainter.brush.radius": "Brush radius %s",
+  "austrianpainter.brush.painted": "Painted %s blocks as %s",
+  "austrianpainter.brush.erased": "Cleared %s painted blocks",
+
+  "austrianpainter.hud.armed": "Brush: %s  r%s",
+  "austrianpainter.hud.no_donor": "Brush: no donor"
 }

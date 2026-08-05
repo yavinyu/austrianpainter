@@ -4,6 +4,7 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -95,6 +96,68 @@ object PaintStorage {
         refreshIndex()
         save()
         markDirty(rule)
+    }
+
+    /**
+     * Brush stroke: paint many positions with one save and one chunk-rebuild pass. Returns how many
+     * positions changed.
+     */
+    fun paintPositions(positions: Collection<BlockPos>, target: Block, paintSound: Boolean): Int {
+        if (positions.isEmpty()) return 0
+        val dim = currentDimension() ?: return 0
+        val list = rules.getOrPut(dim) { mutableListOf() }
+
+        val touched = positions.mapTo(LongOpenHashSet()) { it.asLong() }
+        list.removeAll { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
+        positions.forEach { list.add(PaintRule.OfPos(it.immutable(), target, paintSound)) }
+
+        refreshIndex()
+        save()
+        markRangeDirty(positions)
+        return positions.size
+    }
+
+    /** Removes positional paints under a brush stroke. Region and type rules are left alone. */
+    fun unpaintPositions(positions: Collection<BlockPos>): Int {
+        if (positions.isEmpty()) return 0
+        val dim = currentDimension() ?: return 0
+        val list = rules[dim] ?: return 0
+
+        val touched = positions.mapTo(LongOpenHashSet()) { it.asLong() }
+        val removed = list.count { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
+        if (removed == 0) return 0
+
+        list.removeAll { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
+        refreshIndex()
+        save()
+        markRangeDirty(positions)
+        return removed
+    }
+
+    private fun markRangeDirty(positions: Collection<BlockPos>) {
+        val level = Minecraft.getInstance().level ?: return
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+        var maxZ = Int.MIN_VALUE
+        for (pos in positions) {
+            if (pos.x < minX) minX = pos.x
+            if (pos.y < minY) minY = pos.y
+            if (pos.z < minZ) minZ = pos.z
+            if (pos.x > maxX) maxX = pos.x
+            if (pos.y > maxY) maxY = pos.y
+            if (pos.z > maxZ) maxZ = pos.z
+        }
+        level.setSectionRangeDirty(
+            SectionPos.blockToSectionCoord(minX) - 1,
+            SectionPos.blockToSectionCoord(minY) - 1,
+            SectionPos.blockToSectionCoord(minZ) - 1,
+            SectionPos.blockToSectionCoord(maxX) + 1,
+            SectionPos.blockToSectionCoord(maxY) + 1,
+            SectionPos.blockToSectionCoord(maxZ) + 1,
+        )
     }
 
     fun clearCurrentDimension() {
