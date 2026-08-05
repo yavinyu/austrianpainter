@@ -6,6 +6,8 @@
   "mixins": [
   ],
   "client": [
+    "client.EntityMixin",
+    "client.LevelEventHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

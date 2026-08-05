@@ -31,6 +31,20 @@ fabricApi {
 }
 
 repositories {
+    // Temporary: this build has to run with --offline (see notes on the yarn 26.2 gap), and Gradle
+    // will not serve org.lwjgl:lwjgl:3.4.1:unsafe from its cache in offline mode. Remove this and
+    // the .offline-libs folder once the build can run online again.
+    flatDir { dirs("${rootDir}/.offline-libs") }
+
+    mavenCentral()
+    // Mojang publishes some libraries without POMs, so allow artifact-only metadata.
+    maven("https://libraries.minecraft.net/") {
+        metadataSources {
+            mavenPom()
+            artifact()
+        }
+    }
+
     // Add repositories to retrieve artifacts from in here.
     // You should only use this when depending on other mods because
     // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
@@ -57,9 +71,9 @@ tasks.processResources {
     filesMatching("fabric.mod.json") {
         expand(
             "version" to project.version,
-            "minecraft_version" to project.property("minecraft_version"),
-            "loader_version" to project.property("loader_version"),
-            "kotlin_loader_version" to project.property("kotlin_loader_version")
+            "minecraft_version" to project.property("minecraft_version")!!,
+            "loader_version" to project.property("loader_version")!!,
+            "kotlin_loader_version" to project.property("kotlin_loader_version")!!
         )
     }
 }

@@ -1,0 +1,36 @@
+{
+  "key.categories.austrianpainter.main": "Austrian Painter",
+  "key.austrianpainter.open": "Open paint menu",
+  "key.austrianpainter.corner1": "Mark region corner 1",
+  "key.austrianpainter.corner2": "Mark region corner 2",
+
+  "austrianpainter.screen.title": "Block Painter",
+  "austrianpainter.search": "Search blocks",
+  "austrianpainter.apply": "Apply",
+  "austrianpainter.clear_all": "Clear all",
+
+  "austrianpainter.mode.type": "Block type",
+  "austrianpainter.mode.position": "Position",
+  "austrianpainter.mode.region": "Region",
+
+  "austrianpainter.sound.on": "Sounds: painted",
+  "austrianpainter.sound.off": "Sounds: original",
+
+  "austrianpainter.context.none": "Look at a block first",
+  "austrianpainter.context.corners": "Mark both corners with [ and ]",
+  "austrianpainter.context.type": "All %s in this dimension",
+  "austrianpainter.context.pos": "Block at %s, %s, %s",
+  "austrianpainter.context.region": "Region of %s blocks",
+  "austrianpainter.context.target": "Painting as: %s",
+  "austrianpainter.context.no_target": "Pick a texture donor below",
+
+  "austrianpainter.rules.empty": "No rules in this dimension",
+  "austrianpainter.rules.delete": "Click to delete",
+  "austrianpainter.rule.type": "%s -> %s",
+  "austrianpainter.rule.pos": "%s, %s, %s -> %s",
+  "austrianpainter.rule.region": "region (%s blocks) -> %s",
+
+  "austrianpainter.corner.miss": "Not looking at a block",
+  "austrianpainter.corner.first": "Corner 1: %s, %s, %s",
+  "austrianpainter.corner.second": "Corner 2: %s, %s, %s"
+}

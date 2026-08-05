@@ -2,22 +2,19 @@
   "schemaVersion": 1,
   "id": "austrianpainter",
   "version": "${version}",
-  "name": "austrianpainter",
-  "description": "",
+  "name": "Austrian Painter",
+  "description": "Client-side cosmetic block painting. Repaints blocks with another block's textures while keeping their original shape, collision and behaviour.",
   "authors": [],
   "contact": {},
   "license": "MIT",
   "icon": "assets/austrianpainter/icon.png",
-  "environment": "*",
+  "environment": "client",
   "entrypoints": {
     "fabric-datagen": [
       "com.maxisch.client.AustrianpainterDataGenerator"
     ],
     "client": [
       "com.maxisch.client.AustrianpainterClient"
-    ],
-    "main": [
-      "com.maxisch.Austrianpainter"
     ]
   },
   "mixins": [
