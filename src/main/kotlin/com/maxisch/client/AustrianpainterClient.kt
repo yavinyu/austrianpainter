@@ -2,6 +2,8 @@ package com.maxisch.client
 
 import com.maxisch.client.render.AreaHighlight
 import com.maxisch.client.render.PaintModelPlugin
+import com.maxisch.dungeon.RoomDataStore
+import com.maxisch.dungeon.RoomTracker
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
@@ -22,6 +24,8 @@ class AustrianpainterClient : ClientModInitializer {
         ApSettings.load()
         // Palettes are not world-bound, so the active one loads once here rather than on join.
         PresetStores.palettes.load(ApSettings.activePalette)
+        // Reads the cached room list now and refreshes it in the background.
+        RoomDataStore.start()
 
         ModelLoadingPlugin.register(PaintModelPlugin)
         ckPaintKeys.register()
@@ -31,6 +35,9 @@ class AustrianpainterClient : ClientModInitializer {
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             lastDimension = null
+            // Hypixel sends the player to a fresh instance per dungeon, so the layout never carries
+            // over a join.
+            RoomTracker.reset()
             PaintStorage.onJoinWorld()
         }
 
@@ -38,6 +45,7 @@ class AustrianpainterClient : ClientModInitializer {
             lastDimension = null
             PaintSelection.reset()
             PaintArea.reset()
+            RoomTracker.reset()
             PaintStorage.onLeaveWorld()
         }
 
@@ -54,6 +62,7 @@ class AustrianpainterClient : ClientModInitializer {
                 lastDimension = dimension
                 if (dimension != null) PaintStorage.refreshIndex()
             }
+            RoomTracker.tick()
             PaintStorage.tick()
         }
     }

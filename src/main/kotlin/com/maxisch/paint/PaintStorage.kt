@@ -1,5 +1,8 @@
 package com.maxisch.paint
 
+import com.maxisch.dungeon.RoomScope
+import com.maxisch.dungeon.RoomTransform
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -23,6 +26,13 @@ object PaintStorage {
     var worldKey: String? = null
         private set
 
+    /**
+     * The dungeon room the player is standing in, if any. While it is set every edit goes to that
+     * room's slice in room-relative coordinates instead of to the dimension's absolute one.
+     */
+    var scope: RoomScope? = null
+        private set
+
     private var dirty = false
     private var dirtySince = 0L
 
@@ -37,6 +47,8 @@ object PaintStorage {
     fun onJoinWorld() {
         val key = resolveWorldKey()
         worldKey = key
+        // A server switch drops whatever room was in scope; the tracker rediscovers it.
+        scope = null
 
         PresetStores.blocks.load(ApSettings.blockPresetFor(key))
         PresetStores.types.load(ApSettings.typePresetFor(key))
@@ -46,8 +58,34 @@ object PaintStorage {
     fun onLeaveWorld() {
         flush()
         worldKey = null
+        scope = null
         PaintIndex.clear()
     }
+
+    /**
+     * Called when the player walks into or out of a dungeon room. The room can carry its own
+     * block-type preset, so this swaps presets as well as re-projecting positions.
+     */
+    fun onScopeChanged(next: RoomScope?) {
+        flush()
+
+        val previous = scope
+        scope = next
+
+        val wanted = next?.key?.let { ApSettings.roomTypePresetFor(it) }
+            ?: worldKey?.let { ApSettings.typePresetFor(it) }
+        val presetChanged = wanted != null && wanted != PresetStores.types.activeName
+        if (presetChanged) PresetStores.types.load(wanted)
+
+        refreshIndex()
+
+        // Room borders are crossed constantly; rebuilding every loaded chunk each time would
+        // stutter for nothing when neither room is painted and the rules did not change.
+        if (presetChanged || hasRoomPaint(previous) || hasRoomPaint(next)) markEverythingDirty()
+    }
+
+    private fun hasRoomPaint(room: RoomScope?): Boolean =
+        room != null && blocks.positionsInRoom(room.key)?.isEmpty() == false
 
     /** Called every client tick; the actual write only happens once the burst has settled. */
     fun tick() {
@@ -68,11 +106,32 @@ object PaintStorage {
         dirty = true
     }
 
-    /** Rebuilds the index for the dimension the player is currently in. */
+    /**
+     * Rebuilds the index for the dimension the player is currently in, with the active room's
+     * positions projected onto their world coordinates on top. The index itself only ever sees
+     * absolute positions, so nothing downstream has to know rooms exist.
+     */
     fun refreshIndex() {
         val dimension = currentDimension()
-        val positions = dimension?.let { blocks.positionsIn(it) }
-        PaintIndex.rebuild(positions, types.map)
+        val absolute = dimension?.let { blocks.positionsIn(it) }
+        val room = scope?.let { blocks.positionsInRoom(it.key) }?.takeUnless { it.isEmpty() }
+
+        if (room == null) {
+            PaintIndex.rebuild(absolute, types.map)
+            return
+        }
+
+        val active = scope!!
+        val merged = if (absolute == null) {
+            Long2ObjectOpenHashMap<Block>(room.size)
+        } else {
+            Long2ObjectOpenHashMap(absolute)
+        }
+        for (entry in room.long2ObjectEntrySet()) {
+            val world = RoomTransform.toWorld(BlockPos.of(entry.longKey), active.origin, active.rotation)
+            merged.put(world.asLong(), entry.value)
+        }
+        PaintIndex.rebuild(merged, types.map)
     }
 
     fun currentDimension(): ResourceKey<Level>? = Minecraft.getInstance().level?.dimension()
@@ -87,10 +146,18 @@ object PaintStorage {
         markEverythingDirty()
     }
 
+    /** Inside a room the choice binds to that room, so walking back in restores it. */
     fun activateTypePreset(name: String) {
         flush()
         PresetStores.types.load(name)
-        worldKey?.let { ApSettings.bindTypes(it, PresetStores.types.activeName) }
+
+        val room = scope?.key
+        if (room != null) {
+            ApSettings.bindRoomTypes(room, PresetStores.types.activeName)
+        } else {
+            worldKey?.let { ApSettings.bindTypes(it, PresetStores.types.activeName) }
+        }
+
         refreshIndex()
         markEverythingDirty()
     }
@@ -125,13 +192,33 @@ object PaintStorage {
 
     // ---------------------------------------------------------------- positional rules
 
-    /** Donor block for every painted position in this dimension, grouped for the rule list. */
+    /**
+     * Where positional edits go: the active room's slice while one is in scope, the dimension's
+     * otherwise. [toStorage] maps a world position into whatever space that slice is stored in.
+     */
+    private class Slice(
+        val map: Long2ObjectOpenHashMap<Block>,
+        val toStorage: (BlockPos) -> BlockPos,
+    )
+
+    private fun activeSlice(create: Boolean): Slice? {
+        val room = scope
+        if (room != null) {
+            val map = if (create) blocks.forRoom(room.key) else blocks.positionsInRoom(room.key)
+            return Slice(map ?: return null) { RoomTransform.toRelative(it, room.origin, room.rotation) }
+        }
+
+        val dimension = currentDimension() ?: return null
+        val map = if (create) blocks.forDimension(dimension) else blocks.positionsIn(dimension)
+        return Slice(map ?: return null) { it }
+    }
+
+    /** Donor block for every painted position in the active scope, grouped for the rule list. */
     fun positionsByDonor(): Map<Block, Int> {
-        val dimension = currentDimension() ?: return emptyMap()
-        val positions = blocks.positionsIn(dimension) ?: return emptyMap()
+        val slice = activeSlice(create = false) ?: return emptyMap()
 
         val counts = LinkedHashMap<Block, Int>()
-        for (entry in positions.long2ObjectEntrySet()) {
+        for (entry in slice.map.long2ObjectEntrySet()) {
             counts.merge(entry.value, 1, Int::plus)
         }
         return counts
@@ -146,10 +233,11 @@ object PaintStorage {
      */
     fun paintPositions(positions: Collection<BlockPos>, donorFor: (BlockPos) -> Block): Int {
         if (positions.isEmpty()) return 0
-        val dimension = currentDimension() ?: return 0
+        val slice = activeSlice(create = true) ?: return 0
 
-        val map = blocks.forDimension(dimension)
-        positions.forEach { map.put(it.asLong(), donorFor(it)) }
+        // The donor is picked from the world position so a palette apply keeps its spread even
+        // though the position is filed under the room's own coordinates.
+        positions.forEach { slice.map.put(slice.toStorage(it).asLong(), donorFor(it)) }
 
         refreshIndex()
         markDirty()
@@ -159,12 +247,11 @@ object PaintStorage {
 
     fun unpaintPositions(positions: Collection<BlockPos>): Int {
         if (positions.isEmpty()) return 0
-        val dimension = currentDimension() ?: return 0
-        val map = blocks.positionsIn(dimension) ?: return 0
+        val slice = activeSlice(create = false) ?: return 0
 
         var removed = 0
         for (pos in positions) {
-            if (map.remove(pos.asLong()) != null) removed++
+            if (slice.map.remove(slice.toStorage(pos).asLong()) != null) removed++
         }
         if (removed == 0) return 0
 
@@ -174,10 +261,10 @@ object PaintStorage {
         return removed
     }
 
-    /** Clears every position painted with [target] in this dimension. */
+    /** Clears every position painted with [target] in the active scope. */
     fun removeDonor(target: Block): Int {
-        val dimension = currentDimension() ?: return 0
-        val map = blocks.positionsIn(dimension) ?: return 0
+        val slice = activeSlice(create = false) ?: return 0
+        val map = slice.map
 
         val doomed = LongOpenHashSet()
         for (entry in map.long2ObjectEntrySet()) {
@@ -192,9 +279,9 @@ object PaintStorage {
         return doomed.size
     }
 
-    fun clearCurrentDimension() {
-        val dimension = currentDimension() ?: return
-        val map = blocks.positionsIn(dimension) ?: return
+    /** Clears everything painted in the active scope - the current room, or the dimension. */
+    fun clearCurrentScope() {
+        val map = activeSlice(create = false)?.map ?: return
         if (map.isEmpty()) return
 
         map.clear()

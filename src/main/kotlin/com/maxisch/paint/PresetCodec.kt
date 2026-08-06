@@ -30,10 +30,19 @@ object PresetCodec {
 
     // ---------------------------------------------------------------- positional
 
+    private const val DIMENSIONS = "dimensions"
+    private const val ROOMS = "rooms"
+
     /**
      * ```
-     * { "minecraft:overworld": { "minecraft:black_concrete_powder": ["112,15,0", "112,15,1"] } }
+     * {
+     *   "dimensions": { "minecraft:overworld": { "minecraft:black_concrete_powder": ["112,15,0"] } },
+     *   "rooms":      { "Water Board":        { "minecraft:black_concrete_powder": ["3,70,-5"] } }
+     * }
      * ```
+     *
+     * Files written before rooms existed are a bare dimension map with no wrapper, so a root
+     * without either section is read as one.
      */
     fun readBlocks(path: Path): BlockPreset {
         val preset = BlockPreset()
@@ -43,24 +52,64 @@ object PresetCodec {
             .onFailure { LOGGER.error("Could not parse {}", path, it) }
             .getOrNull() ?: return preset
 
-        for ((dimensionId, donors) in root.entrySet()) {
+        val dimensions = root.getAsJsonObject(DIMENSIONS)
+        val rooms = root.getAsJsonObject(ROOMS)
+
+        if (dimensions == null && rooms == null) {
+            readDimensions(root, preset, path)
+            return preset
+        }
+
+        dimensions?.let { readDimensions(it, preset, path) }
+        rooms?.entrySet()?.forEach { (room, donors) ->
+            readDonors(donors.asJsonObject, preset.forRoom(room), path)
+        }
+        return preset
+    }
+
+    private fun readDimensions(source: JsonObject, preset: BlockPreset, path: Path) {
+        for ((dimensionId, donors) in source.entrySet()) {
             val dimension = Identifier.tryParse(dimensionId)
                 ?.let { ResourceKey.create(Registries.DIMENSION, it) }
             if (dimension == null) {
                 LOGGER.warn("Skipping unknown dimension key '{}' in {}", dimensionId, path)
                 continue
             }
+            readDonors(donors.asJsonObject, preset.forDimension(dimension), path)
+        }
+    }
 
-            val positions = preset.forDimension(dimension)
-            for ((blockId, coordinates) in donors.asJsonObject.entrySet()) {
-                val block = block(blockId, path) ?: continue
-                for (element in coordinates.asJsonArray) {
-                    val pos = parsePos(element.asString, path) ?: continue
-                    positions.put(pos.asLong(), block)
-                }
+    private fun readDonors(source: JsonObject, into: Long2ObjectMap<Block>, path: Path) {
+        for ((blockId, coordinates) in source.entrySet()) {
+            val block = block(blockId, path) ?: continue
+            for (element in coordinates.asJsonArray) {
+                val pos = parsePos(element.asString, path) ?: continue
+                into.put(pos.asLong(), block)
             }
         }
-        return preset
+    }
+
+    fun writeBlocks(path: Path, preset: BlockPreset) {
+        val dimensions = preset.dimensions.entries
+            .filter { it.value.isNotEmpty() }
+            .associate { (dimension, positions) -> dimension.identifier().toString() to positions }
+        val rooms = preset.rooms.entries
+            .filter { it.value.isNotEmpty() }
+            .associate { (room, positions) -> room to positions }
+
+        val text = buildString {
+            append("{\n")
+            append("  \"").append(DIMENSIONS).append("\": ")
+            appendSection(dimensions, 1)
+            append(",\n")
+            append("  \"").append(ROOMS).append("\": ")
+            appendSection(rooms, 1)
+            append('\n')
+            append("}\n")
+        }
+
+        path.createParentDirectories()
+        path.writeText(text)
     }
 
     /**
@@ -68,34 +117,39 @@ object PresetCodec {
      * pretty printer puts every array element on its own line, which triples the file length of a
      * large preset for no benefit.
      */
-    fun writeBlocks(path: Path, preset: BlockPreset) {
-        val text = buildString {
-            append("{\n")
-            val dimensions = preset.dimensions.entries.filter { it.value.isNotEmpty() }
-            dimensions.forEachIndexed { dimensionIndex, (dimension, positions) ->
-                append("  \"").append(dimension.identifier()).append("\": {\n")
-
-                val byDonor = groupByDonor(positions)
-                byDonor.entries.forEachIndexed { donorIndex, (block, coordinates) ->
-                    append("    \"").append(BuiltInRegistries.BLOCK.getKey(block)).append("\": [")
-                    coordinates.forEachIndexed { index, coordinate ->
-                        if (index > 0) append(", ")
-                        append('"').append(coordinate).append('"')
-                    }
-                    append(']')
-                    if (donorIndex < byDonor.size - 1) append(',')
-                    append('\n')
-                }
-
-                append("  }")
-                if (dimensionIndex < dimensions.size - 1) append(',')
-                append('\n')
-            }
-            append("}\n")
+    private fun StringBuilder.appendSection(
+        groups: Map<String, Long2ObjectMap<Block>>,
+        depth: Int,
+    ) {
+        if (groups.isEmpty()) {
+            append("{}")
+            return
         }
 
-        path.createParentDirectories()
-        path.writeText(text)
+        val outer = "  ".repeat(depth)
+        val inner = "  ".repeat(depth + 1)
+
+        append("{\n")
+        groups.entries.forEachIndexed { groupIndex, (key, positions) ->
+            append(inner).append('"').append(key).append("\": {\n")
+
+            val byDonor = groupByDonor(positions)
+            byDonor.entries.forEachIndexed { donorIndex, (block, coordinates) ->
+                append(inner).append("  \"").append(BuiltInRegistries.BLOCK.getKey(block)).append("\": [")
+                coordinates.forEachIndexed { index, coordinate ->
+                    if (index > 0) append(", ")
+                    append('"').append(coordinate).append('"')
+                }
+                append(']')
+                if (donorIndex < byDonor.size - 1) append(',')
+                append('\n')
+            }
+
+            append(inner).append('}')
+            if (groupIndex < groups.size - 1) append(',')
+            append('\n')
+        }
+        append(outer).append('}')
     }
 
     private fun groupByDonor(positions: Long2ObjectMap<Block>): Map<Block, List<String>> {
