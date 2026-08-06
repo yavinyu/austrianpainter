@@ -23,6 +23,9 @@ object PaintArea {
     /** Target every non-air block in the box rather than one type. */
     var sourceAll: Boolean = false
 
+    /** Donor for a plain one-block replace; the palette path ignores it. */
+    var donor: Block? = null
+
     /** What the last apply touched, so a re-roll can redraw exactly that set. */
     var lastApplied: List<BlockPos> = emptyList()
 
@@ -92,6 +95,7 @@ object PaintArea {
         clearCorners()
         source = null
         sourceAll = false
+        donor = null
         lastApplied = emptyList()
     }
 

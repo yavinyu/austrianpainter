@@ -27,8 +27,8 @@ class AreaReplaceScreen(private val parent: Screen?) :
 
     private companion object {
         const val MARGIN = 8
-        const val HEADER = 92
-        const val FOOTER = 56
+        const val HEADER = 102
+        const val FOOTER = 82
         const val ROW_HEIGHT = 14
 
         const val LABEL_WIDTH = 56
@@ -58,6 +58,7 @@ class AreaReplaceScreen(private val parent: Screen?) :
     private var suppressResponder = false
 
     private lateinit var replaceButton: Button
+    private lateinit var replaceRandomButton: Button
     private lateinit var rerollButton: Button
     private lateinit var clearAreaButton: Button
 
@@ -72,19 +73,27 @@ class AreaReplaceScreen(private val parent: Screen?) :
         buildCornerRow(first = true, y = 24, fields = fields1)
         buildCornerRow(first = false, y = 46, fields = fields2)
 
+        // Row one: what to paint with, and the scan controls.
         var x = MARGIN
+        addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.pick_donor")) {
+                minecraft.setScreenAndShow(BlockPickerScreen(this) { PaintArea.donor = it })
+            }.bounds(x, height - FOOTER + 4, 104, 20).build(),
+        )
+        x += 108
+
         addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.edit_palette")) {
                 minecraft.setScreenAndShow(PaletteScreen(this))
-            }.bounds(x, height - FOOTER + 6, 110, 20).build(),
+            }.bounds(x, height - FOOTER + 4, 104, 20).build(),
         )
-        x += 114
+        x += 108
 
         addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.rescan")) { rescan() }
-                .bounds(x, height - FOOTER + 6, 80, 20).build(),
+                .bounds(x, height - FOOTER + 4, 70, 20).build(),
         )
-        x += 84
+        x += 74
 
         addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.clear_selection")) {
@@ -93,22 +102,28 @@ class AreaReplaceScreen(private val parent: Screen?) :
                 PaintArea.sourceAll = false
                 syncFields()
                 rescan()
-            }.bounds(x, height - FOOTER + 6, 120, 20).build(),
+            }.bounds(x, height - FOOTER + 4, 110, 20).build(),
         )
 
+        // Row two: the two ways to apply, plus the redraw of the last one.
         replaceButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.replace")) { replace() }
-                .bounds(MARGIN, height - 26, 100, 20).build(),
+                .bounds(MARGIN, height - 52, 110, 20).build(),
+        )
+
+        replaceRandomButton = addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.area.replace_random")) { replaceRandom() }
+                .bounds(MARGIN + 114, height - 52, 130, 20).build(),
         )
 
         rerollButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.reroll")) { reroll() }
-                .bounds(MARGIN + 104, height - 26, 80, 20).build(),
+                .bounds(MARGIN + 248, height - 52, 80, 20).build(),
         )
 
         clearAreaButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.clear_painted")) { clearPainted() }
-                .bounds(MARGIN + 188, height - 26, 150, 20).build(),
+                .bounds(MARGIN, height - 26, 150, 20).build(),
         )
 
         addRenderableWidget(
@@ -219,23 +234,33 @@ class AreaReplaceScreen(private val parent: Screen?) :
     private fun palette(): PalettePreset = PresetStores.palettes.active
 
     private fun refreshButtons() {
-        val usable = PaintArea.complete && !tooBig()
-        replaceButton.active = usable && PaintArea.hasSource && !palette().isEmpty()
+        val usable = PaintArea.complete && !tooBig() && PaintArea.hasSource
+        replaceButton.active = usable && PaintArea.donor != null
+        replaceRandomButton.active = usable && !palette().isEmpty()
         rerollButton.active = PaintArea.lastApplied.isNotEmpty() && !palette().isEmpty()
-        clearAreaButton.active = usable
+        clearAreaButton.active = PaintArea.complete && !tooBig()
     }
 
     // ------------------------------------------------------------------ actions
 
+    /** One donor for the whole selection. */
     private fun replace() {
-        val level = minecraft.level ?: return
-        if (!PaintArea.hasSource) return
+        val donor = PaintArea.donor ?: return
+        val positions = targetPositions() ?: return
 
-        val positions = if (PaintArea.sourceAll) {
-            AreaScan.allPositions(level)
-        } else {
-            AreaScan.positionsOf(level, PaintArea.source ?: return)
-        }
+        PaintArea.lastApplied = positions
+        val painted = PaintStorage.paintPositions(positions, donor)
+        tell(
+            Component.translatable(
+                "austrianpainter.area.replaced_donor", painted, sourceName(), donor.name,
+            ),
+        )
+        rescan()
+    }
+
+    /** A weighted draw from the active palette, one roll per position. */
+    private fun replaceRandom() {
+        val positions = targetPositions() ?: return
 
         PaintArea.lastApplied = positions
         val painted = draw(positions)
@@ -258,6 +283,17 @@ class AreaReplaceScreen(private val parent: Screen?) :
         val painted = draw(positions)
         tell(Component.translatable("austrianpainter.area.rerolled", painted))
         refreshButtons()
+    }
+
+    private fun targetPositions(): List<BlockPos>? {
+        val level = minecraft.level ?: return null
+        if (!PaintArea.hasSource) return null
+
+        return if (PaintArea.sourceAll) {
+            AreaScan.allPositions(level)
+        } else {
+            AreaScan.positionsOf(level, PaintArea.source ?: return null)
+        }
     }
 
     private fun draw(positions: List<BlockPos>): Int {
@@ -328,7 +364,8 @@ class AreaReplaceScreen(private val parent: Screen?) :
         graphics.text(font, Component.translatable("austrianpainter.area.corner_two"), MARGIN, 51, 0xFFA0A0A0.toInt())
 
         graphics.text(font, sizeLine(), MARGIN, 70, if (tooBig()) 0xFFFF5555.toInt() else 0xFFA0A0A0.toInt())
-        graphics.text(font, donorLine(), MARGIN, 80, 0xFFFFFF55.toInt())
+        graphics.text(font, sourceLine(), MARGIN, 80, 0xFFFFFF55.toInt())
+        graphics.text(font, donorLine(), MARGIN, 90, 0xFFA0A0A0.toInt())
 
         drawRows(graphics, mouseX, mouseY)
     }
@@ -355,17 +392,20 @@ class AreaReplaceScreen(private val parent: Screen?) :
             PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source")
         }
 
-    private fun donorLine(): Component {
-        if (!PaintArea.hasSource) return Component.translatable("austrianpainter.area.no_source")
-        if (palette().isEmpty()) return Component.translatable("austrianpainter.area.palette_empty")
+    private fun sourceLine(): Component =
+        if (PaintArea.hasSource) {
+            Component.translatable("austrianpainter.area.source_line", sourceName())
+        } else {
+            Component.translatable("austrianpainter.area.no_source")
+        }
 
-        return Component.translatable(
-            "austrianpainter.area.pending_palette",
-            sourceName(),
-            PresetStores.palettes.activeName,
-            palette().size,
-        )
-    }
+    /** Both apply paths at once, so it is obvious which of the two buttons is ready. */
+    private fun donorLine(): Component = Component.translatable(
+        "austrianpainter.area.donor_line",
+        PaintArea.donor?.name ?: Component.translatable("austrianpainter.area.any_source"),
+        PresetStores.palettes.activeName,
+        palette().size,
+    )
 
     private fun drawRows(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
         val listHeight = listRows * ROW_HEIGHT
