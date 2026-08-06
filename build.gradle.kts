@@ -45,18 +45,23 @@ loom {
             vmArg("-Dfabric.runtimeMappingNamespace=official")
 
             // DevLogin logs the dev client into a real Microsoft account, which an online-mode
-            // server (Hypixel, or a sim server with online-mode on) requires. It runs as the main
-            // class, authenticates, then hands over to the launcher loom would otherwise have used.
+            // server (Hypixel, or a sim server with online-mode on) requires. The first launch
+            // prints a microsoft.com/link code to the console and waits for you to enter it;
+            // credentials are then cached in ~/.devlogin/accounts.json, never in this repo.
             //
-            // The first launch prints a microsoft.com/link code to the console and waits for you to
-            // enter it. Credentials are cached in ~/.devlogin/accounts.json - nothing
-            // account-related belongs in this repo.
-            // The process main is always fabric's dev launch injector; `mainClass` is what it hands
-            // off to (loom passes it as fabric.dli.main). So DevLogin slots in between the injector
-            // and the game: injector -> DevLogin -> KnotClient, with the credentials DevLogin
-            // fetched appended to the client's arguments.
+            // The process main is always fabric's dev launch injector, and `mainClass` is what it
+            // hands off to (loom passes it as fabric.dli.main). So DevLogin slots in between the
+            // injector and the game - injector -> DevLogin -> KnotClient - appending the
+            // credentials it fetched to the client's arguments.
             mainClass.set("net.covers1624.devlogin.DevLogin")
             programArgs("--launch_target", "net.fabricmc.loader.impl.launch.knot.KnotClient")
+
+            // Hot swapping. Stock JVMs only allow swapping method bodies; the JetBrains Runtime
+            // ships DCEVM, which also takes added or removed methods and fields. Pair it with
+            // mixin's own hot swap (the agent is attached below) so mixin classes reload too.
+            // Only useful when the client is started from a debugger - see runClient's launcher.
+            vmArg("-XX:+AllowEnhancedClassRedefinition")
+            vmArg("-Dmixin.hotSwap=true")
         }
     }
 }
@@ -151,6 +156,32 @@ tasks.processResources {
             "loader_version" to project.property("loader_version")!!,
             "kotlin_loader_version" to project.property("kotlin_loader_version")!!
         )
+    }
+}
+
+// Hot swapping needs the JetBrains Runtime rather than the JDK the rest of the build uses: only it
+// carries DCEVM. Gradle finds it by scanning ~/.jdks, where IntelliJ also keeps its JDKs.
+//
+// This only covers `gradlew runClient`. HotSwap itself needs a debugger, so the workflow that
+// actually benefits is IntelliJ's generated "Minecraft Client" config run in debug mode - set that
+// config's JRE to the same JetBrains Runtime by hand, then Ctrl+Shift+F9 to push a change in.
+val javaToolchainService = extensions.getByType<JavaToolchainService>()
+
+tasks.named<JavaExec>("runClient") {
+    javaLauncher.set(
+        javaToolchainService.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
+            vendor.set(JvmVendorSpec.JETBRAINS)
+        },
+    )
+
+    // Mixin's hot swap agent, so reapplying a mixin does not need a restart either. Resolved from
+    // the compile classpath because the version is loom's to pick, not ours.
+    doFirst {
+        val mixinJar = configurations.compileClasspath.get()
+            .firstOrNull { it.name.startsWith("sponge-mixin-") && it.extension == "jar" }
+        if (mixinJar != null) jvmArgs("-javaagent:${mixinJar.absolutePath}")
+        else logger.warn("sponge-mixin jar not found; mixin hot swap will be inactive")
     }
 }
 
