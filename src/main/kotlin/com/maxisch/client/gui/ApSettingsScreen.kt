@@ -10,12 +10,14 @@ import dev.isxander.yacl3.api.Option
 import dev.isxander.yacl3.api.OptionDescription
 import dev.isxander.yacl3.api.OptionGroup
 import dev.isxander.yacl3.api.YetAnotherConfigLib
+import dev.isxander.yacl3.api.controller.ColorControllerBuilder
 import dev.isxander.yacl3.api.controller.CyclingListControllerBuilder
 import dev.isxander.yacl3.api.controller.IntegerSliderControllerBuilder
 import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
+import java.awt.Color
 
 /** The YACL settings screen. Preset creation and deletion live in [PresetScreen]. */
 object ApSettingsScreen {
@@ -78,6 +80,43 @@ object ApSettingsScreen {
                                             .range(PaintBrush.MIN_RADIUS, PaintBrush.MAX_RADIUS)
                                             .step(1)
                                     }
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .group(
+                        OptionGroup.createBuilder()
+                            .name(Component.translatable("austrianpainter.settings.area"))
+                            .option(
+                                Option.createBuilder<Color>()
+                                    .name(Component.translatable("austrianpainter.settings.area_outline"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.area_outline.desc"),
+                                        ),
+                                    )
+                                    .binding(
+                                        Color(ApSettings.DEFAULT_AREA_OUTLINE, true),
+                                        { Color(ApSettings.areaOutlineColor, true) },
+                                        { ApSettings.areaOutlineColor = it.rgb },
+                                    )
+                                    .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Color>()
+                                    .name(Component.translatable("austrianpainter.settings.area_fill"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.area_fill.desc"),
+                                        ),
+                                    )
+                                    .binding(
+                                        Color(ApSettings.DEFAULT_AREA_FILL, true),
+                                        { Color(ApSettings.areaFillColor, true) },
+                                        { ApSettings.areaFillColor = it.rgb },
+                                    )
+                                    .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
                                     .build(),
                             )
                             .build(),
