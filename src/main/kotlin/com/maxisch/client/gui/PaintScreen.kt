@@ -90,8 +90,8 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
         )
 
         addRenderableWidget(
-            Button.builder(Component.translatable("austrianpainter.clear_dimension")) {
-                PaintStorage.clearCurrentDimension()
+            Button.builder(clearLabel()) {
+                PaintStorage.clearCurrentScope()
                 refresh()
             }.bounds(MARGIN + 104, height - 52, 130, 20).build(),
         )
@@ -120,6 +120,16 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
         if (PaintBrush.enabled) "austrianpainter.brush.button_on" else "austrianpainter.brush.button_off",
         PaintBrush.radius,
     )
+
+    /** In a dungeon room the list and the clear button are about that room, not the whole world. */
+    private fun clearLabel(): Component {
+        val room = PaintStorage.scope?.key
+        return if (room == null) {
+            Component.translatable("austrianpainter.clear_dimension")
+        } else {
+            Component.translatable("austrianpainter.clear_room", room)
+        }
+    }
 
     private fun refresh() {
         rows = buildList {

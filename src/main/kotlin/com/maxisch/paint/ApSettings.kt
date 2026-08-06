@@ -31,11 +31,26 @@ object ApSettings {
     var paintSound: Boolean = true
     var showHud: Boolean = true
 
+    /** Master switch for the Catacombs room scope; off means paint is always world-absolute. */
+    var dungeonRoomScope: Boolean = true
+
     /** ARGB. The fill is deliberately faint so the box never hides what is inside it. */
     var areaOutlineColor: Int = DEFAULT_AREA_OUTLINE
     var areaFillColor: Int = DEFAULT_AREA_FILL
 
     private val worldPresets = LinkedHashMap<String, WorldBinding>()
+
+    /** Room scope key to block-type preset, swapped in while that room is the active scope. */
+    private val roomTypePresets = LinkedHashMap<String, String>()
+
+    fun roomTypePresetFor(scopeKey: String): String? = roomTypePresets[scopeKey]
+
+    fun boundRoomKeys(): Set<String> = roomTypePresets.keys.toSet()
+
+    fun bindRoomTypes(scopeKey: String, preset: String?) {
+        if (preset == null) roomTypePresets.remove(scopeKey) else roomTypePresets[scopeKey] = preset
+        save()
+    }
 
     fun blockPresetFor(worldKey: String): String =
         worldPresets[worldKey]?.blocks ?: defaultBlockPreset
@@ -66,6 +81,9 @@ object ApSettings {
 
             PresetKind.TYPES -> {
                 for (bound in worldPresets.values) if (bound.types == from) bound.types = to
+                for (room in roomTypePresets.keys.toList()) {
+                    if (roomTypePresets[room] == from) roomTypePresets[room] = to
+                }
                 if (defaultTypePreset == from) defaultTypePreset = to
             }
 
@@ -94,8 +112,14 @@ object ApSettings {
             brushRadius = root.get("brushRadius")?.asInt ?: 1
             paintSound = root.get("paintSound")?.asBoolean ?: true
             showHud = root.get("showHud")?.asBoolean ?: true
+            dungeonRoomScope = root.get("dungeonRoomScope")?.asBoolean ?: true
             areaOutlineColor = root.get("areaOutlineColor")?.asInt ?: DEFAULT_AREA_OUTLINE
             areaFillColor = root.get("areaFillColor")?.asInt ?: DEFAULT_AREA_FILL
+
+            roomTypePresets.clear()
+            root.getAsJsonObject("roomTypePresets")?.entrySet()?.forEach { (room, preset) ->
+                roomTypePresets[room] = preset.asString
+            }
 
             worldPresets.clear()
             root.getAsJsonObject("worldPresets")?.entrySet()?.forEach { (world, value) ->
@@ -116,8 +140,13 @@ object ApSettings {
             addProperty("brushRadius", brushRadius)
             addProperty("paintSound", paintSound)
             addProperty("showHud", showHud)
+            addProperty("dungeonRoomScope", dungeonRoomScope)
             addProperty("areaOutlineColor", areaOutlineColor)
             addProperty("areaFillColor", areaFillColor)
+
+            val roomBindings = JsonObject()
+            for ((room, preset) in roomTypePresets) roomBindings.addProperty(room, preset)
+            add("roomTypePresets", roomBindings)
 
             val bindings = JsonObject()
             for ((world, bound) in worldPresets) {

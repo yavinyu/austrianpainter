@@ -28,6 +28,10 @@ object ApPaths {
     val settingsFile: Path
         get() = root.resolve("settings.json")
 
+    /** Downloaded reference data - currently only the Catacombs room list. */
+    val dataDir: Path
+        get() = root.resolve("data")
+
     /** Where rules lived before presets existed; read once for migration, never written. */
     val legacyConfig: Path
         get() = FabricLoader.getInstance().configDir.resolve("austrianpainter")
@@ -37,6 +41,7 @@ object ApPaths {
         blockConfig.createDirectories()
         blockTypeConfig.createDirectories()
         paletteConfig.createDirectories()
+        dataDir.createDirectories()
     }
 
     /** Strips anything that could escape the folder or upset the filesystem. */
