@@ -1,5 +1,6 @@
 package com.maxisch.client
 
+import com.maxisch.client.render.AreaHighlight
 import com.maxisch.client.render.PaintModelPlugin
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
@@ -23,6 +24,7 @@ class AustrianpainterClient : ClientModInitializer {
         ckPaintKeys.register()
         PaintCommands.register()
         PaintHud.register()
+        AreaHighlight.register()
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             lastDimension = null
@@ -32,6 +34,7 @@ class AustrianpainterClient : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
             lastDimension = null
             PaintSelection.reset()
+            PaintArea.reset()
             PaintStorage.onLeaveWorld()
         }
 

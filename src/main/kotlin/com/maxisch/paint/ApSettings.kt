@@ -19,11 +19,18 @@ object ApSettings {
 
     const val DEFAULT_PRESET = "default"
 
+    const val DEFAULT_AREA_OUTLINE = 0xFFFFAA00.toInt()
+    const val DEFAULT_AREA_FILL = 0x30FFAA00
+
     var defaultBlockPreset: String = DEFAULT_PRESET
     var defaultTypePreset: String = DEFAULT_PRESET
     var brushRadius: Int = 1
     var paintSound: Boolean = true
     var showHud: Boolean = true
+
+    /** ARGB. The fill is deliberately faint so the box never hides what is inside it. */
+    var areaOutlineColor: Int = DEFAULT_AREA_OUTLINE
+    var areaFillColor: Int = DEFAULT_AREA_FILL
 
     private val worldPresets = LinkedHashMap<String, WorldBinding>()
 
@@ -76,6 +83,8 @@ object ApSettings {
             brushRadius = root.get("brushRadius")?.asInt ?: 1
             paintSound = root.get("paintSound")?.asBoolean ?: true
             showHud = root.get("showHud")?.asBoolean ?: true
+            areaOutlineColor = root.get("areaOutlineColor")?.asInt ?: DEFAULT_AREA_OUTLINE
+            areaFillColor = root.get("areaFillColor")?.asInt ?: DEFAULT_AREA_FILL
 
             worldPresets.clear()
             root.getAsJsonObject("worldPresets")?.entrySet()?.forEach { (world, value) ->
@@ -95,6 +104,8 @@ object ApSettings {
             addProperty("brushRadius", brushRadius)
             addProperty("paintSound", paintSound)
             addProperty("showHud", showHud)
+            addProperty("areaOutlineColor", areaOutlineColor)
+            addProperty("areaFillColor", areaFillColor)
 
             val bindings = JsonObject()
             for ((world, bound) in worldPresets) {

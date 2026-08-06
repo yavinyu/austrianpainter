@@ -19,19 +19,37 @@ object PaintHud : HudElement {
     }
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, delta: DeltaTracker) {
-        if (!ApSettings.showHud || !PaintBrush.enabled) return
+        if (!ApSettings.showHud) return
 
         val client = Minecraft.getInstance()
         // No need to check for a hidden HUD; vanilla skips the whole hud layer in that case.
         if (client.level == null) return
 
-        val donor = PaintBrush.donor
-        val line = if (donor == null) {
-            Component.translatable("austrianpainter.hud.no_donor")
-        } else {
-            Component.translatable("austrianpainter.hud.armed", donor.name, PaintBrush.radius)
+        var y = 4
+        if (PaintBrush.enabled) {
+            val donor = PaintBrush.donor
+            val line = if (donor == null) {
+                Component.translatable("austrianpainter.hud.no_donor")
+            } else {
+                Component.translatable("austrianpainter.hud.armed", donor.name, PaintBrush.radius)
+            }
+            graphics.text(client.font, line, 4, y, 0xFFFFFF55.toInt())
+            y += 10
         }
 
-        graphics.text(client.font, line, 4, 4, 0xFFFFFF55.toInt())
+        areaLine()?.let { graphics.text(client.font, it, 4, y, 0xFFFFAA55.toInt()) }
+    }
+
+    private fun areaLine(): Component? = when {
+        PaintArea.complete -> Component.translatable(
+            "austrianpainter.hud.area",
+            PaintArea.volume(),
+            PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source"),
+        )
+
+        PaintArea.corner1 != null || PaintArea.corner2 != null ->
+            Component.translatable("austrianpainter.hud.area_partial")
+
+        else -> null
     }
 }
