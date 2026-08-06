@@ -3,6 +3,7 @@ package com.maxisch.client
 import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.CullDiagnostics
 import com.maxisch.paint.PaintStorage
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
@@ -75,6 +76,18 @@ object PaintCommands {
                     )
                     .then(
                         ClientCommands.literal("room").executes { context -> roomStatus(context.source) },
+                    )
+                    .then(
+                        ClientCommands.literal("cull").executes { context ->
+                            context.source.sendFeedback(Component.literal(CullDiagnostics.summary()))
+                            1
+                        }.then(
+                            ClientCommands.literal("reset").executes { context ->
+                                CullDiagnostics.reset()
+                                context.source.sendFeedback(Component.literal("Culling counters reset"))
+                                1
+                            },
+                        ),
                     )
                     .then(
                         ClientCommands.literal("dungeon").then(
