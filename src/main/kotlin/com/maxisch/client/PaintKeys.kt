@@ -26,6 +26,7 @@ object ckPaintKeys {
     private lateinit var openArea: KeyMapping
     private lateinit var cornerFirst: KeyMapping
     private lateinit var cornerSecond: KeyMapping
+    private lateinit var clearArea: KeyMapping
 
     fun register() {
         openMenu = bind("key.austrianpainter.open", GLFW.GLFW_KEY_P)
@@ -34,6 +35,8 @@ object ckPaintKeys {
         openArea = bind("key.austrianpainter.open_area", GLFW.GLFW_KEY_O)
         cornerFirst = bind("key.austrianpainter.corner_first", GLFW.GLFW_KEY_LEFT_BRACKET)
         cornerSecond = bind("key.austrianpainter.corner_second", GLFW.GLFW_KEY_RIGHT_BRACKET)
+        // Next to the two corner keys, since it undoes them.
+        clearArea = bind("key.austrianpainter.clear_area", GLFW.GLFW_KEY_BACKSLASH)
 
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
     }
@@ -52,12 +55,22 @@ object ckPaintKeys {
         while (brushErase.consumeClick()) stroke(client, paint = false)
         while (cornerFirst.consumeClick()) markCorner(client, first = true)
         while (cornerSecond.consumeClick()) markCorner(client, first = false)
+        while (clearArea.consumeClick()) clearSelection(client)
         while (openMenu.consumeClick()) {
             if (client.level != null) client.setScreenAndShow(PaintScreen())
         }
         while (openArea.consumeClick()) {
             if (client.level != null) client.setScreenAndShow(AreaReplaceScreen(null))
         }
+    }
+
+    /** Silent when there is nothing selected, so a stray press does not spam the chat. */
+    private fun clearSelection(client: Minecraft) {
+        if (client.level == null) return
+        if (PaintArea.corner1 == null && PaintArea.corner2 == null && !PaintArea.hasSource) return
+
+        PaintArea.clearSelection()
+        tell(client, Component.translatable("austrianpainter.area.selection_cleared"))
     }
 
     private fun markCorner(client: Minecraft, first: Boolean) {
