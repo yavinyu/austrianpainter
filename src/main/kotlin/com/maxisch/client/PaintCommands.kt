@@ -6,6 +6,7 @@ import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
+import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands
@@ -76,6 +77,19 @@ object PaintCommands {
                         ClientCommands.literal("room").executes { context -> roomStatus(context.source) },
                     )
                     .then(
+                        ClientCommands.literal("dungeon").then(
+                            ClientCommands.argument("floor", StringArgumentType.word())
+                                .suggests { _, builder ->
+                                    SharedSuggestionProvider.suggest(FORCE_SUGGESTIONS, builder)
+                                }
+                                .executes { context -> forceDungeon(context, boss = false) }
+                                .then(
+                                    ClientCommands.literal("boss")
+                                        .executes { context -> forceDungeon(context, boss = true) },
+                                ),
+                        ),
+                    )
+                    .then(
                         ClientCommands.literal("sound").then(
                             ClientCommands.argument("enabled", BoolArgumentType.bool())
                                 .executes { context ->
@@ -110,6 +124,35 @@ object PaintCommands {
         return status(context.source)
     }
 
+    private val FORCE_SUGGESTIONS =
+        listOf("off") + (1..7).map { "F$it" } + (1..7).map { "M$it" }
+
+    /**
+     * Lets a server that does not send Hypixel's sidebar - a test or simulation server - be treated
+     * as a dungeon floor, so boss room paint can be authored there. Session-only on purpose.
+     */
+    private fun forceDungeon(context: CommandContext<FabricClientCommandSource>, boss: Boolean): Int {
+        val raw = StringArgumentType.getString(context, "floor")
+
+        if (raw.equals("off", ignoreCase = true)) {
+            DungeonLocation.force(null)
+            return feedback(context.source, "austrianpainter.room.force_off")
+        }
+
+        val floor = raw.uppercase()
+        if (!Regex("^[FM][1-7]$").matches(floor)) {
+            context.source.sendError(Component.translatable("austrianpainter.room.force_bad", raw))
+            return 0
+        }
+
+        DungeonLocation.force(floor, boss)
+        return feedback(
+            context.source,
+            if (boss) "austrianpainter.room.force_boss" else "austrianpainter.room.force_floor",
+            floor,
+        )
+    }
+
     /** Diagnostics for the dungeon scope: without this the detection is invisible until it fails. */
     private fun roomStatus(source: FabricClientCommandSource): Int {
         feedback(
@@ -117,6 +160,10 @@ object PaintCommands {
             "austrianpainter.room.data",
             RoomDataStore.byCore.size,
         )
+
+        if (DungeonLocation.forced) {
+            feedback(source, "austrianpainter.room.forced", DungeonLocation.forcedFloor ?: "?")
+        }
 
         if (!DungeonLocation.inDungeon) {
             return feedback(source, "austrianpainter.room.no_dungeon")

@@ -2,8 +2,12 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
+    // Matches the Kotlin bundled by the fabric-language-kotlin version in gradle.properties, so the
+    // mod is compiled against exactly what the loader provides at runtime.
     kotlin("jvm") version "2.4.10"
-    id("fabric-loom") version "1.17-SNAPSHOT"
+    // 1.16.2 refuses the yarn placeholder below ("expected official but got intermediary"); 1.17
+    // is the first line that copes with an unobfuscated Minecraft plus stale mappings.
+    id("fabric-loom") version "1.17.18"
     id("maven-publish")
 }
 
@@ -31,9 +35,8 @@ fabricApi {
 }
 
 repositories {
-    // Temporary: this build has to run with --offline (see notes on the yarn 26.2 gap), and Gradle
-    // will not serve org.lwjgl:lwjgl:3.4.1:unsafe from its cache in offline mode. Remove this and
-    // the .offline-libs folder once the build can run online again.
+    // Only needed for `--offline` builds: Gradle will not serve org.lwjgl:lwjgl:3.4.1:unsafe from
+    // its own cache in offline mode. Online builds resolve it normally and ignore this.
     flatDir { dirs("${rootDir}/.offline-libs") }
 
     maven {
@@ -64,18 +67,29 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft("com.mojang:minecraft:${project.property("minecraft_version")}")
+    // Minecraft ships unobfuscated from 26.x on, so nothing is actually remapped and yarn has
+    // published nothing past 1.21.11. Loom still insists on a mappings dependency, so this is that
+    // and nothing more - hence the "not built for this version" warning on every build.
     mappings("net.fabricmc:yarn:${project.property("yarn_mappings")}:v2")
-    modImplementation("net.fabricmc:fabric-loader:${project.property("loader_version")}")
-    modImplementation("net.fabricmc:fabric-language-kotlin:${project.property("kotlin_loader_version")}")
 
-    modImplementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_version")}")
+    // Plain `implementation`, not `modImplementation`: on an unobfuscated Minecraft there is
+    // nothing to remap, and asking loom to remap a mod drags its sources jar through Mercury, which
+    // cannot start without an "official" mapping namespace that yarn no longer provides.
+    implementation("net.fabricmc:fabric-loader:${project.property("loader_version")}")
+    implementation("net.fabricmc:fabric-language-kotlin:${project.property("kotlin_loader_version")}")
+
+    // Loom only puts mixin on the classpath for `modImplementation` loader deps, so declare it.
+    // Provided by the loader at runtime, never bundled.
+    compileOnly("net.fabricmc:sponge-mixin:${project.property("mixin_version")}")
+
+    implementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_version")}")
 
     // Settings screen. Hard dependency.
-    modImplementation("dev.isxander:yet-another-config-lib:3.9.6+26.2-fabric")
+    implementation("dev.isxander:yet-another-config-lib:${project.property("yacl_version")}")
 
     // Only needed to compile the ModMenuApi entrypoint; the mod runs fine without it installed.
-    modCompileOnly("com.terraformersmc:modmenu:20.0.1")
-    modLocalRuntime("com.terraformersmc:modmenu:20.0.1")
+    compileOnly("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
+    localRuntime("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
 }
 
 tasks.processResources {
