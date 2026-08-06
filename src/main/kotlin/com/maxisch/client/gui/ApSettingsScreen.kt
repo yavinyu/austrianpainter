@@ -26,9 +26,11 @@ object ApSettingsScreen {
         // Snapshot the names now so the cyclers have a stable value set for this screen's lifetime.
         val blockPresets = PresetStores.blocks.listWithActive()
         val typePresets = PresetStores.types.listWithActive()
+        val palettes = PresetStores.palettes.listWithActive()
 
         var pendingBlockPreset = PresetStores.blocks.activeName
         var pendingTypePreset = PresetStores.types.activeName
+        var pendingPalette = PresetStores.palettes.activeName
 
         return YetAnotherConfigLib.createBuilder()
             .title(Component.translatable("austrianpainter.settings.title"))
@@ -192,6 +194,39 @@ object ApSettingsScreen {
                             )
                             .build(),
                     )
+                    .group(
+                        OptionGroup.createBuilder()
+                            .name(Component.translatable("austrianpainter.presets.palettes"))
+                            .option(
+                                Option.createBuilder<String>()
+                                    .name(Component.translatable("austrianpainter.settings.active_preset"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.active_palette.desc"),
+                                        ),
+                                    )
+                                    .binding(
+                                        PresetStores.palettes.activeName,
+                                        { pendingPalette },
+                                        { pendingPalette = it },
+                                    )
+                                    .controller {
+                                        CyclingListControllerBuilder.create(it)
+                                            .values(palettes)
+                                            .formatValue { name -> Component.literal(name) }
+                                    }
+                                    .build(),
+                            )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.manage_palettes"))
+                                    .action { screen, _ ->
+                                        Minecraft.getInstance().setScreenAndShow(PresetScreen.palettes(screen))
+                                    }
+                                    .build(),
+                            )
+                            .build(),
+                    )
                     .build(),
             )
             .save {
@@ -202,6 +237,9 @@ object ApSettingsScreen {
                 }
                 if (pendingTypePreset != PresetStores.types.activeName) {
                     PaintStorage.activateTypePreset(pendingTypePreset)
+                }
+                if (pendingPalette != PresetStores.palettes.activeName) {
+                    PaintStorage.activatePalette(pendingPalette)
                 }
             }
             .build()

@@ -4,6 +4,8 @@ import com.maxisch.client.AreaScan
 import com.maxisch.client.PaintArea
 import com.maxisch.client.PaintSelection
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.PalettePreset
+import com.maxisch.paint.PresetStores
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.EditBox
@@ -11,6 +13,7 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
+import net.minecraft.util.RandomSource
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.block.Block
 
@@ -36,7 +39,13 @@ class AreaReplaceScreen(private val parent: Screen?) :
         const val RESCAN_DELAY_TICKS = 8
     }
 
-    private var counts: List<Pair<Block, Int>> = emptyList()
+    private sealed interface Row {
+        /** Synthetic first row: every non-air block in the box. */
+        data class All(val count: Int) : Row
+        data class Type(val block: Block, val count: Int) : Row
+    }
+
+    private var rows: List<Row> = emptyList()
     private var scroll = 0
 
     private var rescanIn = -1
@@ -49,8 +58,8 @@ class AreaReplaceScreen(private val parent: Screen?) :
     private var suppressResponder = false
 
     private lateinit var replaceButton: Button
+    private lateinit var rerollButton: Button
     private lateinit var clearAreaButton: Button
-    private lateinit var donorButton: Button
 
     private val listX get() = MARGIN
     private val listY get() = HEADER
@@ -64,9 +73,9 @@ class AreaReplaceScreen(private val parent: Screen?) :
         buildCornerRow(first = false, y = 46, fields = fields2)
 
         var x = MARGIN
-        donorButton = addRenderableWidget(
-            Button.builder(Component.translatable("austrianpainter.pick_donor")) {
-                minecraft.setScreenAndShow(BlockPickerScreen(this) { PaintArea.donor = it })
+        addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.area.edit_palette")) {
+                minecraft.setScreenAndShow(PaletteScreen(this))
             }.bounds(x, height - FOOTER + 6, 110, 20).build(),
         )
         x += 114
@@ -81,6 +90,7 @@ class AreaReplaceScreen(private val parent: Screen?) :
             Button.builder(Component.translatable("austrianpainter.area.clear_selection")) {
                 PaintArea.clearCorners()
                 PaintArea.source = null
+                PaintArea.sourceAll = false
                 syncFields()
                 rescan()
             }.bounds(x, height - FOOTER + 6, 120, 20).build(),
@@ -91,9 +101,14 @@ class AreaReplaceScreen(private val parent: Screen?) :
                 .bounds(MARGIN, height - 26, 100, 20).build(),
         )
 
+        rerollButton = addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.area.reroll")) { reroll() }
+                .bounds(MARGIN + 104, height - 26, 80, 20).build(),
+        )
+
         clearAreaButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.clear_painted")) { clearPainted() }
-                .bounds(MARGIN + 104, height - 26, 150, 20).build(),
+                .bounds(MARGIN + 188, height - 26, 150, 20).build(),
         )
 
         addRenderableWidget(
@@ -182,24 +197,31 @@ class AreaReplaceScreen(private val parent: Screen?) :
         rescanIn = -1
 
         val level = minecraft.level
-        counts = if (level == null || !PaintArea.complete || tooBig()) {
+        rows = if (level == null || !PaintArea.complete || tooBig()) {
             emptyList()
         } else {
-            AreaScan.histogram(level).map { it.key to it.value }
+            val histogram = AreaScan.histogram(level)
+            buildList {
+                add(Row.All(histogram.values.sum()))
+                histogram.forEach { (block, count) -> add(Row.Type(block, count)) }
+            }
         }
 
         // Drop a source that is no longer in the box so the button state cannot lie.
-        if (counts.none { it.first == PaintArea.source }) PaintArea.source = null
+        if (rows.none { it is Row.Type && it.block == PaintArea.source }) PaintArea.source = null
 
-        scroll = scroll.coerceIn(0, (counts.size - listRows).coerceAtLeast(0))
+        scroll = scroll.coerceIn(0, (rows.size - listRows).coerceAtLeast(0))
         refreshButtons()
     }
 
     private fun tooBig(): Boolean = PaintArea.volume() > PaintArea.MAX_VOLUME
 
+    private fun palette(): PalettePreset = PresetStores.palettes.active
+
     private fun refreshButtons() {
         val usable = PaintArea.complete && !tooBig()
-        replaceButton.active = usable && PaintArea.source != null && PaintArea.donor != null
+        replaceButton.active = usable && PaintArea.hasSource && !palette().isEmpty()
+        rerollButton.active = PaintArea.lastApplied.isNotEmpty() && !palette().isEmpty()
         clearAreaButton.active = usable
     }
 
@@ -207,13 +229,41 @@ class AreaReplaceScreen(private val parent: Screen?) :
 
     private fun replace() {
         val level = minecraft.level ?: return
-        val source = PaintArea.source ?: return
-        val donor = PaintArea.donor ?: return
+        if (!PaintArea.hasSource) return
 
-        val positions = AreaScan.positionsOf(level, source)
-        val painted = PaintStorage.paintPositions(positions, donor)
-        tell(Component.translatable("austrianpainter.area.replaced", painted, source.name, donor.name))
+        val positions = if (PaintArea.sourceAll) {
+            AreaScan.allPositions(level)
+        } else {
+            AreaScan.positionsOf(level, PaintArea.source ?: return)
+        }
+
+        PaintArea.lastApplied = positions
+        val painted = draw(positions)
+        tell(
+            Component.translatable(
+                "austrianpainter.area.replaced",
+                painted,
+                sourceName(),
+                PresetStores.palettes.activeName,
+            ),
+        )
         rescan()
+    }
+
+    /** Redraws the previous apply. The same positions, a fresh roll of the same palette. */
+    private fun reroll() {
+        val positions = PaintArea.lastApplied
+        if (positions.isEmpty()) return
+
+        val painted = draw(positions)
+        tell(Component.translatable("austrianpainter.area.rerolled", painted))
+        refreshButtons()
+    }
+
+    private fun draw(positions: List<BlockPos>): Int {
+        val picker = palette().picker() ?: return 0
+        val random = RandomSource.create()
+        return PaintStorage.paintPositions(positions) { picker.next(random) }
     }
 
     private fun clearPainted() {
@@ -232,8 +282,19 @@ class AreaReplaceScreen(private val parent: Screen?) :
     override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
         if (super.mouseClicked(event, doubled)) return true
 
-        val row = rowAt(event.x, event.y) ?: return false
-        PaintArea.source = row.first
+        when (val row = rowAt(event.x, event.y)) {
+            is Row.All -> {
+                PaintArea.sourceAll = true
+                PaintArea.source = null
+            }
+
+            is Row.Type -> {
+                PaintArea.sourceAll = false
+                PaintArea.source = row.block
+            }
+
+            null -> return false
+        }
         refreshButtons()
         return true
     }
@@ -241,15 +302,20 @@ class AreaReplaceScreen(private val parent: Screen?) :
     override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
         val delta = if (scrollY > 0) -1 else if (scrollY < 0) 1 else 0
         if (delta == 0) return false
-        scroll = (scroll + delta).coerceIn(0, (counts.size - listRows).coerceAtLeast(0))
+        scroll = (scroll + delta).coerceIn(0, (rows.size - listRows).coerceAtLeast(0))
         return true
     }
 
-    private fun rowAt(mouseX: Double, mouseY: Double): Pair<Block, Int>? {
+    private fun rowAt(mouseX: Double, mouseY: Double): Row? {
         if (mouseX < listX || mouseX > listX + listWidth || mouseY < listY) return null
         val index = ((mouseY - listY) / ROW_HEIGHT).toInt()
         if (index !in 0 until listRows) return null
-        return counts.getOrNull(scroll + index)
+        return rows.getOrNull(scroll + index)
+    }
+
+    private fun isSelected(row: Row): Boolean = when (row) {
+        is Row.All -> PaintArea.sourceAll
+        is Row.Type -> !PaintArea.sourceAll && row.block == PaintArea.source
     }
 
     // ------------------------------------------------------------------ render
@@ -282,42 +348,54 @@ class AreaReplaceScreen(private val parent: Screen?) :
         )
     }
 
+    private fun sourceName(): Component =
+        if (PaintArea.sourceAll) {
+            Component.translatable("austrianpainter.area.everything")
+        } else {
+            PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source")
+        }
+
     private fun donorLine(): Component {
-        val source = PaintArea.source
-        val donor = PaintArea.donor
-        if (source == null) return Component.translatable("austrianpainter.area.no_source")
-        if (donor == null) return Component.translatable("austrianpainter.context.no_target")
-        return Component.translatable("austrianpainter.area.pending", source.name, donor.name)
+        if (!PaintArea.hasSource) return Component.translatable("austrianpainter.area.no_source")
+        if (palette().isEmpty()) return Component.translatable("austrianpainter.area.palette_empty")
+
+        return Component.translatable(
+            "austrianpainter.area.pending_palette",
+            sourceName(),
+            PresetStores.palettes.activeName,
+            palette().size,
+        )
     }
 
     private fun drawRows(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
         val listHeight = listRows * ROW_HEIGHT
         graphics.fill(listX - 2, listY - 2, listX + listWidth + 2, listY + listHeight + 2, 0x60000000)
 
-        if (counts.isEmpty()) {
+        if (rows.isEmpty()) {
             graphics.text(font, emptyLine(), listX + 2, listY + 3, 0xFF808080.toInt())
             return
         }
 
         graphics.enableScissor(listX, listY, listX + listWidth, listY + listHeight)
         for (index in 0 until listRows) {
-            val (block, count) = counts.getOrNull(scroll + index) ?: break
+            val row = rows.getOrNull(scroll + index) ?: break
             val y = listY + index * ROW_HEIGHT
 
-            if (block == PaintArea.source) {
-                graphics.fill(listX, y, listX + listWidth, y + ROW_HEIGHT, 0x6055FF55)
+            if (isSelected(row)) {
+                graphics.fill(listX, y, listX + listWidth, y + ROW_HEIGHT, 0x8055FF55.toInt())
             } else if (mouseX in listX..(listX + listWidth) && mouseY in y until y + ROW_HEIGHT) {
                 graphics.fill(listX, y, listX + listWidth, y + ROW_HEIGHT, 0x60FFFFFF)
             }
 
-            val stack = ItemStack(block)
-            if (!stack.isEmpty) graphics.item(stack, listX + 2, y - 1)
-
-            graphics.text(
-                font,
-                Component.translatable("austrianpainter.area.row", block.name, count),
-                listX + 22, y + 3, 0xFFFFFFFF.toInt(),
-            )
+            val label = when (row) {
+                is Row.All -> Component.translatable("austrianpainter.area.row_all", row.count)
+                is Row.Type -> {
+                    val stack = ItemStack(row.block)
+                    if (!stack.isEmpty) graphics.item(stack, listX + 2, y - 1)
+                    Component.translatable("austrianpainter.area.row", row.block.name, row.count)
+                }
+            }
+            graphics.text(font, label, listX + 22, y + 3, 0xFFFFFFFF.toInt())
         }
         graphics.disableScissor()
 
