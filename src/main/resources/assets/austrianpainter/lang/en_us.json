@@ -48,6 +48,7 @@
   "austrianpainter.brush.erased": "Cleared %s painted blocks",
 
   "austrianpainter.hud.room": "Room: %s",
+  "austrianpainter.hud.room_forced": "Room: %s (forced)",
   "austrianpainter.hud.armed": "Brush: %s  r%s",
   "austrianpainter.hud.no_donor": "Brush: no donor",
   "austrianpainter.hud.area": "Area: %s blocks  source %s  palette %s",
@@ -99,6 +100,11 @@
 
   "austrianpainter.room.data": "Room data: %s known room cores",
   "austrianpainter.room.no_dungeon": "Not in a dungeon",
+  "austrianpainter.room.forced": "Detection forced to floor %s (/paintbrush dungeon off to stop)",
+  "austrianpainter.room.force_floor": "Forcing floor %s. Boss room still decided by where you stand",
+  "austrianpainter.room.force_boss": "Forcing floor %s and boss room, wherever you stand",
+  "austrianpainter.room.force_off": "Dungeon detection back to normal",
+  "austrianpainter.room.force_bad": "Expected off, F1-F7 or M1-M7, got '%s'",
   "austrianpainter.room.floor": "Floor %s - %s",
   "austrianpainter.room.in_boss": "boss room",
   "austrianpainter.room.in_rooms": "rooms",
