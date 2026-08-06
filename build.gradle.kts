@@ -34,10 +34,40 @@ fabricApi {
     }
 }
 
+loom {
+    runs {
+        named("client") {
+            // The stand-in yarn mappings make loom launch the client in the "named" namespace, but
+            // an unobfuscated Minecraft means every mod ships its class tweakers in "official" -
+            // loader then rejects each one with "Namespace (official) does not match current
+            // runtime namespace (named)". The two namespaces hold identical names here, so telling
+            // loader which one it is really in is enough.
+            vmArg("-Dfabric.runtimeMappingNamespace=official")
+
+            // DevLogin logs the dev client into a real Microsoft account, which an online-mode
+            // server (Hypixel, or a sim server with online-mode on) requires. It runs as the main
+            // class, authenticates, then hands over to the launcher loom would otherwise have used.
+            //
+            // The first launch prints a microsoft.com/link code to the console and waits for you to
+            // enter it. Credentials are cached in ~/.devlogin/accounts.json - nothing
+            // account-related belongs in this repo.
+            // The process main is always fabric's dev launch injector; `mainClass` is what it hands
+            // off to (loom passes it as fabric.dli.main). So DevLogin slots in between the injector
+            // and the game: injector -> DevLogin -> KnotClient, with the credentials DevLogin
+            // fetched appended to the client's arguments.
+            mainClass.set("net.covers1624.devlogin.DevLogin")
+            programArgs("--launch_target", "net.fabricmc.loader.impl.launch.knot.KnotClient")
+        }
+    }
+}
+
 repositories {
     // Only needed for `--offline` builds: Gradle will not serve org.lwjgl:lwjgl:3.4.1:unsafe from
     // its own cache in offline mode. Online builds resolve it normally and ignore this.
     flatDir { dirs("${rootDir}/.offline-libs") }
+
+    // DevLogin, so the dev client can log in with a real account and join online-mode servers.
+    maven("https://maven.covers1624.net/")
 
     maven {
         name = "Xander"
@@ -68,14 +98,21 @@ dependencies {
     // To change the versions see the gradle.properties file
     minecraft("com.mojang:minecraft:${project.property("minecraft_version")}")
     // Minecraft ships unobfuscated from 26.x on, so nothing is actually remapped and yarn has
-    // published nothing past 1.21.11. Loom still insists on a mappings dependency, so this is that
-    // and nothing more - hence the "not built for this version" warning on every build.
+    // published nothing past 1.21.11. Loom refuses to configure without a mappings entry, so this
+    // is a stand-in and nothing more - hence the "not built for this version" warning on every
+    // build, and the runtime namespace override on the client run below.
     mappings("net.fabricmc:yarn:${project.property("yarn_mappings")}:v2")
 
-    // Plain `implementation`, not `modImplementation`: on an unobfuscated Minecraft there is
-    // nothing to remap, and asking loom to remap a mod drags its sources jar through Mercury, which
-    // cannot start without an "official" mapping namespace that yarn no longer provides.
-    implementation("net.fabricmc:fabric-loader:${project.property("loader_version")}")
+    // The loader stays `modImplementation`: that is how loom learns to put the loader's own
+    // libraries - ASM, mixin, access-widener - on the dev run classpath. Plain `implementation`
+    // still compiles and jars fine, but leaves runClient dying on "ASM not detected on the
+    // classpath". Loom does not remap the loader itself, so this costs nothing.
+    modImplementation("net.fabricmc:fabric-loader:${project.property("loader_version")}")
+
+    // The mods are plain `implementation`, not `modImplementation`: on an unobfuscated Minecraft
+    // there is nothing to remap, and asking loom to remap a mod drags its sources jar through
+    // Mercury, which cannot start without an "official" mapping namespace yarn no longer provides.
+    // In dev the loader still finds them by scanning the classpath for fabric.mod.json.
     implementation("net.fabricmc:fabric-language-kotlin:${project.property("kotlin_loader_version")}")
 
     // Loom only puts mixin on the classpath for `modImplementation` loader deps, so declare it.
@@ -90,6 +127,15 @@ dependencies {
     // Only needed to compile the ModMenuApi entrypoint; the mod runs fine without it installed.
     compileOnly("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
     localRuntime("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
+
+    // Dev-run only, never shipped: logs the dev client into a real Microsoft account so it can join
+    // online-mode servers. See the client run config for how it is hooked up.
+    //
+    // Not DevAuth: that one has been unmaintained since 2022 and its OAuth app no longer accepts
+    // its own redirect URI, so Microsoft rejects every login with "The provided value for the input
+    // parameter 'redirect_uri' is not valid". DevLogin uses the device-code flow, which has no
+    // redirect URI to go stale.
+    localRuntime("net.covers1624:DevLogin:${project.property("devlogin_version")}")
 }
 
 tasks.processResources {
