@@ -35,11 +35,42 @@ object DungeonLocation {
     val isMaster: Boolean
         get() = floor?.startsWith("M") == true
 
+    /**
+     * Pretends the player is on this floor no matter what the scoreboard says, so the feature can
+     * be built and tested on a server that does not send Hypixel's sidebar. Null is the normal
+     * detected behaviour. Deliberately not persisted: it must not survive into a real dungeon.
+     */
+    var forcedFloor: String? = null
+        private set
+
+    /** With [forcedFloor] set, treats the player as inside the boss room wherever they stand. */
+    var forcedBoss: Boolean = false
+        private set
+
+    val forced: Boolean
+        get() = forcedFloor != null
+
+    fun force(floor: String?, boss: Boolean = false) {
+        forcedFloor = floor
+        forcedBoss = boss
+        if (floor == null) reset()
+    }
+
     fun tick() {
         val client = Minecraft.getInstance()
         val level = client.level
         val player = client.player
         if (level == null || player == null) return reset()
+
+        forcedFloor?.let { forcedName ->
+            inSkyblock = true
+            inDungeon = true
+            floor = forcedName
+            floorNumber = forcedName.lastOrNull()?.digitToIntOrNull() ?: 0
+            val number = floorNumber ?: 0
+            inBoss = forcedBoss || (number in 1..7 && BOSS_BOUNDS[number - 1].contains(player.position()))
+            return
+        }
 
         val scoreboard = level.scoreboard
         val sidebar = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)

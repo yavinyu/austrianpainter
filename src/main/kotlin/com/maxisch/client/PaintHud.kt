@@ -1,5 +1,6 @@
 package com.maxisch.client
 
+import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
@@ -30,12 +31,18 @@ object PaintHud : HudElement {
         var y = 4
         // Painting inside a dungeon room writes somewhere else entirely, so say so plainly.
         PaintStorage.scope?.let { scope ->
+            val forced = DungeonLocation.forced
             graphics.text(
                 client.font,
-                Component.translatable("austrianpainter.hud.room", scope.key),
+                Component.translatable(
+                    if (forced) "austrianpainter.hud.room_forced" else "austrianpainter.hud.room",
+                    scope.key,
+                ),
                 4,
                 y,
-                0xFF55FFFF.toInt(),
+                // Forced detection is a testing crutch; colour it differently so it is never
+                // mistaken for the real thing.
+                if (forced) 0xFFFFAA00.toInt() else 0xFF55FFFF.toInt(),
             )
             y += 10
         }
