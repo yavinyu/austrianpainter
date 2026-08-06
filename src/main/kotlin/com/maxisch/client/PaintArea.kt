@@ -17,14 +17,20 @@ object PaintArea {
     var corner1: BlockPos? = null
     var corner2: BlockPos? = null
 
-    /** Block type inside the area that a replace will target. */
+    /** Block type inside the area that a replace will target; ignored while [sourceAll] is set. */
     var source: Block? = null
 
-    /** Texture donor the source is replaced with. */
-    var donor: Block? = null
+    /** Target every non-air block in the box rather than one type. */
+    var sourceAll: Boolean = false
+
+    /** What the last apply touched, so a re-roll can redraw exactly that set. */
+    var lastApplied: List<BlockPos> = emptyList()
 
     val complete: Boolean
         get() = corner1 != null && corner2 != null
+
+    val hasSource: Boolean
+        get() = sourceAll || source != null
 
     fun min(): BlockPos? {
         val a = corner1 ?: return null
@@ -85,7 +91,8 @@ object PaintArea {
     fun reset() {
         clearCorners()
         source = null
-        donor = null
+        sourceAll = false
+        lastApplied = emptyList()
     }
 
     /** Coordinates typed into the screen can sit outside the world; the walk must not. */

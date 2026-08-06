@@ -29,6 +29,13 @@ object AreaScan {
         return hits
     }
 
+    /** Every non-air position inside the area, whatever the block is. */
+    fun allPositions(level: Level): List<BlockPos> {
+        val hits = ArrayList<BlockPos>()
+        walk(level) { pos, _ -> hits.add(pos.immutable()) }
+        return hits
+    }
+
     /**
      * One shared walk. The position handed to [visit] is a shared mutable cursor - copy it before
      * keeping it.

@@ -128,7 +128,10 @@ class PresetStore<P : Any>(
     }.onFailure { logger.error("Could not delete preset '{}'", name, it) }.getOrDefault(false)
 }
 
-/** The two preset folders. */
+/** Which folder a preset name lives in; used when a rename has to fix up the bindings. */
+enum class PresetKind { BLOCKS, TYPES, PALETTES }
+
+/** The three preset folders. */
 object PresetStores {
 
     val blocks = PresetStore(
@@ -144,6 +147,14 @@ object PresetStores {
         reader = PresetCodec::readTypes,
         writer = PresetCodec::writeTypes,
         empty = { TypePreset() },
+        describe = { it.size },
+    )
+
+    val palettes = PresetStore(
+        folder = { ApPaths.paletteConfig },
+        reader = PresetCodec::readPalette,
+        writer = PresetCodec::writePalette,
+        empty = { PalettePreset() },
         describe = { it.size },
     )
 }

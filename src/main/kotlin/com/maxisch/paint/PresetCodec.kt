@@ -142,6 +142,37 @@ object PresetCodec {
 
     private val GSON = com.google.gson.GsonBuilder().setPrettyPrinting().create()
 
+    // ---------------------------------------------------------------- palettes
+
+    /** `{ "minecraft:stone": 70, "minecraft:cobblestone": 20 }` — relative draw weights. */
+    fun readPalette(path: Path): PalettePreset {
+        val preset = PalettePreset()
+        if (path.notExists()) return preset
+
+        val root = runCatching { JsonParser.parseString(path.readText()).asJsonObject }
+            .onFailure { LOGGER.error("Could not parse {}", path, it) }
+            .getOrNull() ?: return preset
+
+        for ((blockId, weight) in root.entrySet()) {
+            val block = block(blockId, path) ?: continue
+            val parsed = runCatching { weight.asInt }.getOrElse {
+                LOGGER.warn("Skipping malformed weight for '{}' in {}", blockId, path)
+                return@getOrElse PalettePreset.MIN_WEIGHT
+            }
+            preset.weights[block] = parsed.coerceIn(PalettePreset.MIN_WEIGHT, PalettePreset.MAX_WEIGHT)
+        }
+        return preset
+    }
+
+    fun writePalette(path: Path, preset: PalettePreset) {
+        val root = JsonObject()
+        for ((block, weight) in preset.weights) {
+            root.addProperty(BuiltInRegistries.BLOCK.getKey(block).toString(), weight)
+        }
+        path.createParentDirectories()
+        path.writeText(GSON.toJson(root) + "\n")
+    }
+
     // ---------------------------------------------------------------- shared
 
     private fun block(id: String, path: Path): Block? {

@@ -1,6 +1,7 @@
 package com.maxisch.client
 
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.PresetStores
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
@@ -44,12 +45,18 @@ object PaintHud : HudElement {
         PaintArea.complete -> Component.translatable(
             "austrianpainter.hud.area",
             PaintArea.volume(),
-            PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source"),
+            sourceName(),
+            PresetStores.palettes.activeName,
         )
 
         PaintArea.corner1 != null || PaintArea.corner2 != null ->
             Component.translatable("austrianpainter.hud.area_partial")
 
         else -> null
+    }
+
+    private fun sourceName(): Component = when {
+        PaintArea.sourceAll -> Component.translatable("austrianpainter.area.everything")
+        else -> PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source")
     }
 }
