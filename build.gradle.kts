@@ -36,6 +36,15 @@ repositories {
     // the .offline-libs folder once the build can run online again.
     flatDir { dirs("${rootDir}/.offline-libs") }
 
+    maven {
+        name = "Xander"
+        url = uri("https://maven.isxander.dev/releases")
+    }
+    maven {
+        name = "Terraformers"
+        url = uri("https://maven.terraformersmc.com/releases")
+    }
+
     mavenCentral()
     // Mojang publishes some libraries without POMs, so allow artifact-only metadata.
     maven("https://libraries.minecraft.net/") {
@@ -60,6 +69,13 @@ dependencies {
     modImplementation("net.fabricmc:fabric-language-kotlin:${project.property("kotlin_loader_version")}")
 
     modImplementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_version")}")
+
+    // Settings screen. Hard dependency.
+    modImplementation("dev.isxander:yet-another-config-lib:3.9.6+26.2-fabric")
+
+    // Only needed to compile the ModMenuApi entrypoint; the mod runs fine without it installed.
+    modCompileOnly("com.terraformersmc:modmenu:20.0.1")
+    modLocalRuntime("com.terraformersmc:modmenu:20.0.1")
 }
 
 tasks.processResources {

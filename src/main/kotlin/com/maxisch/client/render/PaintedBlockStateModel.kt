@@ -13,7 +13,6 @@ import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.util.ARGB
 import net.minecraft.util.RandomSource
-import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
 import java.util.function.Predicate
 
@@ -39,8 +38,8 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
             return
         }
 
-        val palette = RetexturePalette.of(paint.block)
-        val paintedState = paint.block.defaultBlockState()
+        val palette = RetexturePalette.of(paint)
+        val paintedState = paint.defaultBlockState()
 
         emitter.pushTransform { quad ->
             retexture(quad, palette, finder, paintedState, level, pos)
@@ -74,7 +73,7 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
     ): Material.Baked {
         val paint = PaintIndex.paintAt(pos, state)
             ?: return super.particleMaterial(level, pos, state)
-        return RetexturePalette.of(paint.block).particle
+        return RetexturePalette.of(paint).particle
     }
 
     override fun materialFlags(
@@ -85,7 +84,7 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
     ): Int {
         val base = super.materialFlags(level, pos, state, random)
         val paint = PaintIndex.paintAt(pos, state) ?: return base
-        return base or RetexturePalette.of(paint.block).materialFlags
+        return base or RetexturePalette.of(paint).materialFlags
     }
 
     private fun retexture(
@@ -129,9 +128,4 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
         Minecraft.getInstance().blockColors.getTintSource(state, tintIndex)
             ?.colorInWorld(state, level, pos) ?: -1
     }.getOrDefault(-1)
-
-    companion object {
-        fun paintedBlockAt(pos: BlockPos?, state: BlockState): Block? =
-            PaintIndex.paintAt(pos, state)?.block
-    }
 }
