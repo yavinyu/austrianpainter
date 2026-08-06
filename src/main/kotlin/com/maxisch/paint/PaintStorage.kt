@@ -95,6 +95,16 @@ object PaintStorage {
         markEverythingDirty()
     }
 
+    /**
+     * Palettes only feed future applies, so nothing already painted changes - no index rebuild and
+     * no chunk rebuild here.
+     */
+    fun activatePalette(name: String) {
+        PresetStores.palettes.load(name)
+        ApSettings.activePalette = PresetStores.palettes.activeName
+        ApSettings.save()
+    }
+
     // ---------------------------------------------------------------- type rules
 
     fun typeRules(): Map<Block, Block> = types.map
@@ -127,12 +137,19 @@ object PaintStorage {
         return counts
     }
 
-    fun paintPositions(positions: Collection<BlockPos>, target: Block): Int {
+    fun paintPositions(positions: Collection<BlockPos>, target: Block): Int =
+        paintPositions(positions) { target }
+
+    /**
+     * [donorFor] picks the donor per position, which is how a palette apply spreads a weighted mix
+     * over the area. A lambda rather than a prepared map: an area can hold millions of positions.
+     */
+    fun paintPositions(positions: Collection<BlockPos>, donorFor: (BlockPos) -> Block): Int {
         if (positions.isEmpty()) return 0
         val dimension = currentDimension() ?: return 0
 
         val map = blocks.forDimension(dimension)
-        positions.forEach { map.put(it.asLong(), target) }
+        positions.forEach { map.put(it.asLong(), donorFor(it)) }
 
         refreshIndex()
         markDirty()

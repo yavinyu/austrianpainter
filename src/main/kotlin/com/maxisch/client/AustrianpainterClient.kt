@@ -1,8 +1,10 @@
 package com.maxisch.client
 
+import com.maxisch.client.render.AreaHighlight
 import com.maxisch.client.render.PaintModelPlugin
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.PresetStores
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -18,11 +20,14 @@ class AustrianpainterClient : ClientModInitializer {
     override fun onInitializeClient() {
         // Settings decide which presets a world binds to, so they have to be up before any join.
         ApSettings.load()
+        // Palettes are not world-bound, so the active one loads once here rather than on join.
+        PresetStores.palettes.load(ApSettings.activePalette)
 
         ModelLoadingPlugin.register(PaintModelPlugin)
         ckPaintKeys.register()
         PaintCommands.register()
         PaintHud.register()
+        AreaHighlight.register()
 
         ClientPlayConnectionEvents.JOIN.register { _, _, _ ->
             lastDimension = null
@@ -32,6 +37,7 @@ class AustrianpainterClient : ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ ->
             lastDimension = null
             PaintSelection.reset()
+            PaintArea.reset()
             PaintStorage.onLeaveWorld()
         }
 

@@ -1,7 +1,9 @@
 package com.maxisch.client.gui
 
 import com.maxisch.paint.ApPaths
+import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.PresetKind
 import com.maxisch.paint.PresetStore
 import com.maxisch.paint.PresetStores
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -19,6 +21,7 @@ class PresetScreen private constructor(
     private val parent: Screen?,
     private val store: PresetStore<*>,
     private val titleKey: String,
+    private val kind: PresetKind,
     private val activate: (String) -> Unit,
 ) : Screen(Component.translatable(titleKey)) {
 
@@ -27,6 +30,7 @@ class PresetScreen private constructor(
             parent,
             PresetStores.blocks,
             "austrianpainter.presets.blocks",
+            PresetKind.BLOCKS,
             PaintStorage::activateBlockPreset,
         )
 
@@ -34,7 +38,16 @@ class PresetScreen private constructor(
             parent,
             PresetStores.types,
             "austrianpainter.presets.types",
+            PresetKind.TYPES,
             PaintStorage::activateTypePreset,
+        )
+
+        fun palettes(parent: Screen?) = PresetScreen(
+            parent,
+            PresetStores.palettes,
+            "austrianpainter.presets.palettes",
+            PresetKind.PALETTES,
+            PaintStorage::activatePalette,
         )
 
         private const val MARGIN = 8
@@ -121,7 +134,7 @@ class PresetScreen private constructor(
     private fun rename() {
         val from = selected ?: return
         val to = store.rename(from, nameBox.value) ?: return
-        com.maxisch.paint.ApSettings.renamePreset(store === PresetStores.blocks, from, to)
+        ApSettings.renamePreset(kind, from, to)
         select(to)
     }
 
@@ -130,7 +143,7 @@ class PresetScreen private constructor(
         if (!store.delete(name)) return
         selected = null
         // The active preset may have just been deleted; reload so state matches the folder.
-        if (store.activeName == name) activate(com.maxisch.paint.ApSettings.DEFAULT_PRESET)
+        if (store.activeName == name) activate(ApSettings.DEFAULT_PRESET)
         refresh()
     }
 
