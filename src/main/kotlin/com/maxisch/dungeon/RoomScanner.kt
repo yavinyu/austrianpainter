@@ -2,7 +2,10 @@ package com.maxisch.dungeon
 
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.Identifier
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.chunk.status.ChunkStatus
 import net.minecraft.world.phys.Vec3
@@ -32,8 +35,14 @@ object RoomScanner {
     /** Roof heights that mean "doorway", not "room". */
     private val DOOR_ROOF_HEIGHTS = intArrayOf(73, 74, 81, 82)
 
-    /** The marker Hypixel leaves on one roof corner of every room. */
-    private val BLUE_TERRACOTTA = Blocks.DYED_TERRACOTTA.blue()
+    /**
+     * The marker Hypixel leaves on one roof corner of every room. Looked up by id rather than
+     * through [Blocks] because the dyed-block constants were folded into a colour collection in
+     * 26.2, and the id is the one spelling that holds either way.
+     */
+    private val BLUE_TERRACOTTA: Block by lazy {
+        BuiltInRegistries.BLOCK.getValue(Identifier.parse("minecraft:blue_terracotta"))
+    }
 
     private val CLAY_CORNERS = arrayOf(
         -HALF_ROOM to -HALF_ROOM,
