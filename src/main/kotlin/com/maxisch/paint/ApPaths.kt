@@ -21,6 +21,10 @@ object ApPaths {
     val blockTypeConfig: Path
         get() = root.resolve("block-type-config")
 
+    /** Weighted donor palettes, one flat block-to-weight map per file. */
+    val paletteConfig: Path
+        get() = root.resolve("palette-config")
+
     val settingsFile: Path
         get() = root.resolve("settings.json")
 
@@ -32,6 +36,7 @@ object ApPaths {
         root.createDirectories()
         blockConfig.createDirectories()
         blockTypeConfig.createDirectories()
+        paletteConfig.createDirectories()
     }
 
     /** Strips anything that could escape the folder or upset the filesystem. */

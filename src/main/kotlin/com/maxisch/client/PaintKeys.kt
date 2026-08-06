@@ -1,5 +1,6 @@
 package com.maxisch.client
 
+import com.maxisch.client.gui.AreaReplaceScreen
 import com.maxisch.client.gui.PaintScreen
 import com.maxisch.paint.PaintStorage
 import com.mojang.blaze3d.platform.InputConstants
@@ -22,11 +23,17 @@ object ckPaintKeys {
     private lateinit var openMenu: KeyMapping
     private lateinit var brushPaint: KeyMapping
     private lateinit var brushErase: KeyMapping
+    private lateinit var openArea: KeyMapping
+    private lateinit var cornerFirst: KeyMapping
+    private lateinit var cornerSecond: KeyMapping
 
     fun register() {
         openMenu = bind("key.austrianpainter.open", GLFW.GLFW_KEY_P)
         brushPaint = bind("key.austrianpainter.brush_paint", GLFW.GLFW_KEY_G)
         brushErase = bind("key.austrianpainter.brush_erase", GLFW.GLFW_KEY_H)
+        openArea = bind("key.austrianpainter.open_area", GLFW.GLFW_KEY_O)
+        cornerFirst = bind("key.austrianpainter.corner_first", GLFW.GLFW_KEY_LEFT_BRACKET)
+        cornerSecond = bind("key.austrianpainter.corner_second", GLFW.GLFW_KEY_RIGHT_BRACKET)
 
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
     }
@@ -43,8 +50,32 @@ object ckPaintKeys {
     private fun tick(client: Minecraft) {
         while (brushPaint.consumeClick()) stroke(client, paint = true)
         while (brushErase.consumeClick()) stroke(client, paint = false)
+        while (cornerFirst.consumeClick()) markCorner(client, first = true)
+        while (cornerSecond.consumeClick()) markCorner(client, first = false)
         while (openMenu.consumeClick()) {
             if (client.level != null) client.setScreenAndShow(PaintScreen())
+        }
+        while (openArea.consumeClick()) {
+            if (client.level != null) client.setScreenAndShow(AreaReplaceScreen(null))
+        }
+    }
+
+    private fun markCorner(client: Minecraft, first: Boolean) {
+        val pos = PaintSelection.lookedAtPos() ?: run {
+            tell(client, Component.translatable("austrianpainter.brush.miss"))
+            return
+        }
+
+        PaintArea.setCorner(first, pos)
+        tell(
+            client,
+            Component.translatable(
+                if (first) "austrianpainter.area.corner_first" else "austrianpainter.area.corner_second",
+                pos.x, pos.y, pos.z,
+            ),
+        )
+        if (PaintArea.complete) {
+            tell(client, Component.translatable("austrianpainter.area.volume", PaintArea.volume()))
         }
     }
 
