@@ -97,9 +97,7 @@ class AreaReplaceScreen(private val parent: Screen?) :
 
         addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.area.clear_selection")) {
-                PaintArea.clearCorners()
-                PaintArea.source = null
-                PaintArea.sourceAll = false
+                PaintArea.clearSelection()
                 syncFields()
                 rescan()
             }.bounds(x, height - FOOTER + 4, 110, 20).build(),
