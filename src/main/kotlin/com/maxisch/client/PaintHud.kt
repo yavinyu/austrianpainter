@@ -1,5 +1,6 @@
 package com.maxisch.client
 
+import com.maxisch.paint.ApSettings
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
@@ -18,7 +19,7 @@ object PaintHud : HudElement {
     }
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, delta: DeltaTracker) {
-        if (!PaintBrush.enabled) return
+        if (!ApSettings.showHud || !PaintBrush.enabled) return
 
         val client = Minecraft.getInstance()
         // No need to check for a hidden HUD; vanilla skips the whole hud layer in that case.

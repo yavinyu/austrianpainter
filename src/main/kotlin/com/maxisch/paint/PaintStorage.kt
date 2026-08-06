@@ -1,138 +1,192 @@
 package com.maxisch.paint
 
-import com.google.gson.GsonBuilder
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
-import com.google.gson.JsonParser
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
-import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.core.SectionPos
-import net.minecraft.core.registries.BuiltInRegistries
-import net.minecraft.core.registries.Registries
-import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
-import org.slf4j.LoggerFactory
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.createDirectories
-import kotlin.io.path.notExists
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 
 /**
- * Owns the authored rules for the world the client is currently connected to, keeps them on disk,
- * and pushes the active dimension's rules into [PaintIndex].
+ * Owns the live rule set: whichever block preset and block-type preset the current world is bound
+ * to, plus the wiring that pushes them into [PaintIndex] and asks the renderer to rebuild.
+ *
+ * Writes are debounced. A radius-5 brush click adds up to 729 positions and can fire several times
+ * a second, so saving on every mutation would rewrite the whole preset file continuously.
  */
 object PaintStorage {
 
-    private val LOGGER = LoggerFactory.getLogger("austrianpainter")
-    private val GSON = GsonBuilder().setPrettyPrinting().create()
+    private const val FLUSH_DELAY_MS = 2_000L
 
-    private val rules = LinkedHashMap<ResourceKey<Level>, MutableList<PaintRule>>()
-
-    /** Identifies the world/server the rules belong to; null while not in a world. */
+    /** Identifies the world/server the bindings belong to; null while not in a world. */
     var worldKey: String? = null
         private set
 
-    private val configDir: Path
-        get() = FabricLoader.getInstance().configDir.resolve("austrianpainter")
+    private var dirty = false
+    private var dirtySince = 0L
+
+    private val blocks: BlockPreset
+        get() = PresetStores.blocks.active
+
+    private val types: TypePreset
+        get() = PresetStores.types.active
 
     // ---------------------------------------------------------------- lifecycle
 
     fun onJoinWorld() {
         val key = resolveWorldKey()
-        if (key == worldKey) {
-            refreshIndex()
-            return
-        }
         worldKey = key
-        rules.clear()
-        load()
+
+        PresetStores.blocks.load(ApSettings.blockPresetFor(key))
+        PresetStores.types.load(ApSettings.typePresetFor(key))
         refreshIndex()
     }
 
     fun onLeaveWorld() {
-        save()
+        flush()
         worldKey = null
-        rules.clear()
         PaintIndex.clear()
     }
 
-    /** Called when the player changes dimension, so the index tracks the right rule set. */
-    fun refreshIndex() {
-        PaintIndex.rebuild(currentRules())
+    /** Called every client tick; the actual write only happens once the burst has settled. */
+    fun tick() {
+        if (!dirty) return
+        if (System.currentTimeMillis() - dirtySince < FLUSH_DELAY_MS) return
+        flush()
     }
 
-    // ---------------------------------------------------------------- queries
+    fun flush() {
+        if (!dirty) return
+        dirty = false
+        PresetStores.blocks.saveActive()
+        PresetStores.types.saveActive()
+    }
+
+    private fun markDirty() {
+        if (!dirty) dirtySince = System.currentTimeMillis()
+        dirty = true
+    }
+
+    /** Rebuilds the index for the dimension the player is currently in. */
+    fun refreshIndex() {
+        val dimension = currentDimension()
+        val positions = dimension?.let { blocks.positionsIn(it) }
+        PaintIndex.rebuild(positions, types.map)
+    }
 
     fun currentDimension(): ResourceKey<Level>? = Minecraft.getInstance().level?.dimension()
 
-    fun currentRules(): List<PaintRule> {
-        val dim = currentDimension() ?: return emptyList()
-        return rules[dim] ?: emptyList()
-    }
+    // ---------------------------------------------------------------- preset switching
 
-    // ---------------------------------------------------------------- mutation
-
-    fun add(rule: PaintRule) {
-        val dim = currentDimension() ?: return
-        val list = rules.getOrPut(dim) { mutableListOf() }
-        // A newer rule for the same target area replaces the older one.
-        list.removeAll { it.sameSubjectAs(rule) }
-        list.add(rule)
+    fun activateBlockPreset(name: String) {
+        flush()
+        PresetStores.blocks.load(name)
+        worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
         refreshIndex()
-        save()
-        markDirty(rule)
+        markEverythingDirty()
     }
 
-    fun remove(rule: PaintRule) {
-        val dim = currentDimension() ?: return
-        val list = rules[dim] ?: return
-        if (!list.remove(rule)) return
+    fun activateTypePreset(name: String) {
+        flush()
+        PresetStores.types.load(name)
+        worldKey?.let { ApSettings.bindTypes(it, PresetStores.types.activeName) }
         refreshIndex()
-        save()
-        markDirty(rule)
+        markEverythingDirty()
     }
 
-    /**
-     * Brush stroke: paint many positions with one save and one chunk-rebuild pass. Returns how many
-     * positions changed.
-     */
-    fun paintPositions(positions: Collection<BlockPos>, target: Block, paintSound: Boolean): Int {
+    // ---------------------------------------------------------------- type rules
+
+    fun typeRules(): Map<Block, Block> = types.map
+
+    fun setTypeRule(source: Block, target: Block) {
+        types.map[source] = target
+        refreshIndex()
+        PresetStores.types.saveActive()
+        markEverythingDirty()
+    }
+
+    fun removeTypeRule(source: Block) {
+        if (types.map.remove(source) == null) return
+        refreshIndex()
+        PresetStores.types.saveActive()
+        markEverythingDirty()
+    }
+
+    // ---------------------------------------------------------------- positional rules
+
+    /** Donor block for every painted position in this dimension, grouped for the rule list. */
+    fun positionsByDonor(): Map<Block, Int> {
+        val dimension = currentDimension() ?: return emptyMap()
+        val positions = blocks.positionsIn(dimension) ?: return emptyMap()
+
+        val counts = LinkedHashMap<Block, Int>()
+        for (entry in positions.long2ObjectEntrySet()) {
+            counts.merge(entry.value, 1, Int::plus)
+        }
+        return counts
+    }
+
+    fun paintPositions(positions: Collection<BlockPos>, target: Block): Int {
         if (positions.isEmpty()) return 0
-        val dim = currentDimension() ?: return 0
-        val list = rules.getOrPut(dim) { mutableListOf() }
+        val dimension = currentDimension() ?: return 0
 
-        val touched = positions.mapTo(LongOpenHashSet()) { it.asLong() }
-        list.removeAll { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
-        positions.forEach { list.add(PaintRule.OfPos(it.immutable(), target, paintSound)) }
+        val map = blocks.forDimension(dimension)
+        positions.forEach { map.put(it.asLong(), target) }
 
         refreshIndex()
-        save()
+        markDirty()
         markRangeDirty(positions)
         return positions.size
     }
 
-    /** Removes positional paints under a brush stroke. Region and type rules are left alone. */
     fun unpaintPositions(positions: Collection<BlockPos>): Int {
         if (positions.isEmpty()) return 0
-        val dim = currentDimension() ?: return 0
-        val list = rules[dim] ?: return 0
+        val dimension = currentDimension() ?: return 0
+        val map = blocks.positionsIn(dimension) ?: return 0
 
-        val touched = positions.mapTo(LongOpenHashSet()) { it.asLong() }
-        val removed = list.count { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
+        var removed = 0
+        for (pos in positions) {
+            if (map.remove(pos.asLong()) != null) removed++
+        }
         if (removed == 0) return 0
 
-        list.removeAll { it is PaintRule.OfPos && touched.contains(it.pos.asLong()) }
         refreshIndex()
-        save()
+        markDirty()
         markRangeDirty(positions)
         return removed
     }
+
+    /** Clears every position painted with [target] in this dimension. */
+    fun removeDonor(target: Block): Int {
+        val dimension = currentDimension() ?: return 0
+        val map = blocks.positionsIn(dimension) ?: return 0
+
+        val doomed = LongOpenHashSet()
+        for (entry in map.long2ObjectEntrySet()) {
+            if (entry.value == target) doomed.add(entry.longKey)
+        }
+        if (doomed.isEmpty()) return 0
+
+        doomed.forEach { map.remove(it) }
+        refreshIndex()
+        markDirty()
+        markEverythingDirty()
+        return doomed.size
+    }
+
+    fun clearCurrentDimension() {
+        val dimension = currentDimension() ?: return
+        val map = blocks.positionsIn(dimension) ?: return
+        if (map.isEmpty()) return
+
+        map.clear()
+        refreshIndex()
+        markDirty()
+        markEverythingDirty()
+    }
+
+    // ---------------------------------------------------------------- re-render
 
     private fun markRangeDirty(positions: Collection<BlockPos>) {
         val level = Minecraft.getInstance().level ?: return
@@ -160,153 +214,26 @@ object PaintStorage {
         )
     }
 
-    fun clearCurrentDimension() {
-        val dim = currentDimension() ?: return
-        val list = rules.remove(dim) ?: return
-        refreshIndex()
-        save()
-        list.forEach(::markDirty)
-    }
-
-    private fun PaintRule.sameSubjectAs(other: PaintRule): Boolean = when {
-        this is PaintRule.OfType && other is PaintRule.OfType -> source == other.source
-        this is PaintRule.OfPos && other is PaintRule.OfPos -> pos == other.pos
-        this is PaintRule.OfRegion && other is PaintRule.OfRegion -> min == other.min && max == other.max
-        else -> false
-    }
-
-    // ---------------------------------------------------------------- re-render
-
-    /** Schedules a chunk rebuild for everything the rule can affect. */
-    private fun markDirty(rule: PaintRule) {
+    /** Type rules and preset swaps can hit anything, so rebuild the whole loaded view. */
+    private fun markEverythingDirty() {
         val mc = Minecraft.getInstance()
         val level = mc.level ?: return
-        when (rule) {
-            is PaintRule.OfPos -> {
-                val sec = SectionPos.of(rule.pos)
-                level.setSectionDirtyWithNeighbors(sec.x, sec.y, sec.z)
-            }
-
-            is PaintRule.OfRegion -> level.setSectionRangeDirty(
-                SectionPos.blockToSectionCoord(rule.min.x) - 1,
-                SectionPos.blockToSectionCoord(rule.min.y) - 1,
-                SectionPos.blockToSectionCoord(rule.min.z) - 1,
-                SectionPos.blockToSectionCoord(rule.max.x) + 1,
-                SectionPos.blockToSectionCoord(rule.max.y) + 1,
-                SectionPos.blockToSectionCoord(rule.max.z) + 1,
-            )
-
-            is PaintRule.OfType -> {
-                // A type rule can hit anything, so rebuild the whole loaded view.
-                val player = mc.player ?: return
-                val radius = mc.options.renderDistance().get() + 1
-                val sec = SectionPos.of(player.blockPosition())
-                level.setSectionRangeDirty(
-                    sec.x - radius, level.minSectionY, sec.z - radius,
-                    sec.x + radius, level.maxSectionY, sec.z + radius,
-                )
-            }
-        }
+        val player = mc.player ?: return
+        val radius = mc.options.renderDistance().get() + 1
+        val section = SectionPos.of(player.blockPosition())
+        level.setSectionRangeDirty(
+            section.x - radius, level.minSectionY, section.z - radius,
+            section.x + radius, level.maxSectionY, section.z + radius,
+        )
     }
 
-    // ---------------------------------------------------------------- persistence
+    // ---------------------------------------------------------------- world identity
 
     private fun resolveWorldKey(): String {
         val mc = Minecraft.getInstance()
         val raw = mc.singleplayerServer?.worldData?.levelName
             ?: mc.currentServer?.ip
             ?: "unknown"
-        return raw.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "unknown" }
-    }
-
-    private fun file(): Path? = worldKey?.let { configDir.resolve("$it.json") }
-
-    private fun load() {
-        val path = file() ?: return
-        if (path.notExists()) return
-        runCatching {
-            val root = JsonParser.parseString(path.readText()).asJsonObject
-            for ((dimId, value) in root.entrySet()) {
-                val dim = Identifier.tryParse(dimId)?.let { ResourceKey.create(Registries.DIMENSION, it) }
-                    ?: continue
-                val list = mutableListOf<PaintRule>()
-                for (element in value.asJsonArray) {
-                    decode(element.asJsonObject)?.let(list::add)
-                }
-                if (list.isNotEmpty()) rules[dim] = list
-            }
-        }.onFailure { LOGGER.error("Failed to read paint rules from {}", path, it) }
-    }
-
-    private fun save() {
-        val path = file() ?: return
-        runCatching {
-            if (rules.values.all { it.isEmpty() }) {
-                Files.deleteIfExists(path)
-                return
-            }
-            val root = JsonObject()
-            for ((dim, list) in rules) {
-                if (list.isEmpty()) continue
-                val array = JsonArray()
-                list.forEach { array.add(encode(it)) }
-                root.add(dim.identifier().toString(), array)
-            }
-            configDir.createDirectories()
-            path.writeText(GSON.toJson(root))
-        }.onFailure { LOGGER.error("Failed to write paint rules to {}", path, it) }
-    }
-
-    private fun encode(rule: PaintRule): JsonObject = JsonObject().apply {
-        addProperty("target", BuiltInRegistries.BLOCK.getKey(rule.target).toString())
-        addProperty("sound", rule.paintSound)
-        when (rule) {
-            is PaintRule.OfType -> {
-                addProperty("kind", "type")
-                addProperty("source", BuiltInRegistries.BLOCK.getKey(rule.source).toString())
-            }
-
-            is PaintRule.OfPos -> {
-                addProperty("kind", "pos")
-                add("pos", encodePos(rule.pos))
-            }
-
-            is PaintRule.OfRegion -> {
-                addProperty("kind", "region")
-                add("min", encodePos(rule.min))
-                add("max", encodePos(rule.max))
-            }
-        }
-    }
-
-    private fun decode(json: JsonObject): PaintRule? {
-        val target = block(json, "target") ?: return null
-        val sound = json.get("sound")?.asBoolean ?: false
-        return when (json.get("kind")?.asString) {
-            "type" -> block(json, "source")?.let { PaintRule.OfType(it, target, sound) }
-            "pos" -> decodePos(json, "pos")?.let { PaintRule.OfPos(it, target, sound) }
-            "region" -> {
-                val min = decodePos(json, "min") ?: return null
-                val max = decodePos(json, "max") ?: return null
-                PaintRule.OfRegion(min, max, target, sound)
-            }
-
-            else -> null
-        }
-    }
-
-    private fun block(json: JsonObject, key: String): Block? {
-        val id = json.get(key)?.asString?.let(Identifier::tryParse) ?: return null
-        return BuiltInRegistries.BLOCK.getValue(id)
-    }
-
-    private fun encodePos(pos: BlockPos) = JsonArray().apply {
-        add(pos.x); add(pos.y); add(pos.z)
-    }
-
-    private fun decodePos(json: JsonObject, key: String): BlockPos? {
-        val array = json.get(key)?.asJsonArray ?: return null
-        if (array.size() != 3) return null
-        return BlockPos(array[0].asInt, array[1].asInt, array[2].asInt)
+        return ApPaths.sanitize(raw).ifEmpty { "unknown" }
     }
 }

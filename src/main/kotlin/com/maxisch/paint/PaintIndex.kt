@@ -8,20 +8,19 @@ import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
 
-/** Resolved paint for one block: which block to borrow from, and whether sounds follow. */
-class Paint(val block: Block, val paintSound: Boolean)
-
 /**
- * Flattened, read-only view of the active dimension's rules, built for the chunk-build hot path.
+ * Flattened, read-only view of the active presets for the dimension the player is in, built for the
+ * chunk-build hot path.
  *
  * Chunk building runs on worker threads while edits happen on the main thread, so mutation swaps a
- * whole new immutable [Snapshot] instead of editing maps in place.
+ * whole new immutable [Snapshot] instead of editing maps in place. That costs a map copy per edit,
+ * which is why edits are batched per brush stroke rather than per block.
  */
 object PaintIndex {
 
     private class Snapshot(
-        val byPos: Long2ObjectMap<Paint>,
-        val byBlock: Reference2ObjectMap<Block, Paint>,
+        val byPos: Long2ObjectMap<Block>,
+        val byBlock: Reference2ObjectMap<Block, Block>,
     ) {
         val empty: Boolean = byPos.isEmpty() && byBlock.isEmpty()
         val hasPositional: Boolean = !byPos.isEmpty()
@@ -40,35 +39,27 @@ object PaintIndex {
         snapshot = EMPTY
     }
 
-    fun rebuild(rules: List<PaintRule>) {
-        if (rules.isEmpty()) {
+    /** [positions] is this dimension's slice of the active block preset; [types] is global. */
+    fun rebuild(positions: Long2ObjectMap<Block>?, types: Map<Block, Block>) {
+        if (positions.isNullOrEmptyMap() && types.isEmpty()) {
             snapshot = EMPTY
             return
         }
-        val byPos = Long2ObjectOpenHashMap<Paint>()
-        val byBlock = Reference2ObjectOpenHashMap<Block, Paint>()
-        for (rule in rules) {
-            val paint = Paint(rule.target, rule.paintSound)
-            when (rule) {
-                is PaintRule.OfType -> byBlock[rule.source] = paint
-                is PaintRule.OfPos -> byPos.put(rule.pos.asLong(), paint)
-                is PaintRule.OfRegion -> {
-                    if (rule.volume > PaintRule.MAX_REGION_VOLUME) continue
-                    for (pos in BlockPos.betweenClosed(rule.min, rule.max)) {
-                        byPos.put(pos.asLong(), paint)
-                    }
-                }
-            }
-        }
+
+        val byPos = if (positions == null) Long2ObjectOpenHashMap() else Long2ObjectOpenHashMap(positions)
+        val byBlock = Reference2ObjectOpenHashMap<Block, Block>(types.size)
+        byBlock.putAll(types)
         snapshot = Snapshot(byPos, byBlock)
     }
+
+    private fun Long2ObjectMap<Block>?.isNullOrEmptyMap(): Boolean = this == null || this.isEmpty()
 
     /**
      * Hot path. Returns null when [pos] is unpainted, which is the overwhelmingly common case and
      * costs a single volatile read when no rules exist at all.
      */
     @JvmStatic
-    fun paintAt(pos: BlockPos?, state: BlockState): Paint? {
+    fun paintAt(pos: BlockPos?, state: BlockState): Block? {
         val snap = snapshot
         if (snap.empty) return null
         if (pos != null && snap.hasPositional) {
@@ -79,10 +70,10 @@ object PaintIndex {
         return null
     }
 
-    /** Same lookup, restricted to rules that opted into sound painting. */
+    /** Same lookup, gated on the global sound setting. */
     @JvmStatic
     fun soundPaintAt(pos: BlockPos?, state: BlockState): Block? {
-        val paint = paintAt(pos, state) ?: return null
-        return if (paint.paintSound) paint.block else null
+        if (!ApSettings.paintSound) return null
+        return paintAt(pos, state)
     }
 }
