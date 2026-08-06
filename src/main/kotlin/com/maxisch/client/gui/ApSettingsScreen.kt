@@ -1,6 +1,7 @@
 package com.maxisch.client.gui
 
 import com.maxisch.client.PaintBrush
+import com.maxisch.dungeon.RoomScanner
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
@@ -119,6 +120,57 @@ object ApSettingsScreen {
                                         { ApSettings.areaFillColor = it.rgb },
                                     )
                                     .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .build(),
+            )
+            .category(
+                ConfigCategory.createBuilder()
+                    .name(Component.translatable("austrianpainter.settings.dungeon"))
+                    .group(
+                        OptionGroup.createBuilder()
+                            .name(Component.translatable("austrianpainter.settings.dungeon"))
+                            .description(
+                                OptionDescription.of(
+                                    Component.translatable("austrianpainter.settings.dungeon.desc"),
+                                ),
+                            )
+                            .option(
+                                Option.createBuilder<Boolean>()
+                                    .name(Component.translatable("austrianpainter.settings.room_scope"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.room_scope.desc"),
+                                        ),
+                                    )
+                                    .binding(true, { ApSettings.dungeonRoomScope }, { ApSettings.dungeonRoomScope = it })
+                                    .controller { TickBoxControllerBuilder.create(it) }
+                                    .build(),
+                            )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.rescan"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.rescan.desc"),
+                                        ),
+                                    )
+                                    .action { _, _ -> RoomScanner.reset() }
+                                    .build(),
+                            )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.unbind_room_types"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.unbind_room_types.desc"),
+                                        ),
+                                    )
+                                    .action { _, _ ->
+                                        PaintStorage.scope?.key?.let { ApSettings.bindRoomTypes(it, null) }
+                                    }
                                     .build(),
                             )
                             .build(),
