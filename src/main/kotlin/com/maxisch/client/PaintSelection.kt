@@ -6,15 +6,12 @@ import net.minecraft.world.level.block.Block
 import net.minecraft.world.phys.BlockHitResult
 import net.minecraft.world.phys.HitResult
 
-/** Transient, client-only selection state shared between the keybinds and the paint screen. */
+/** Transient, client-only selection state shared between the keybinds and the paint screens. */
 object PaintSelection {
 
-    enum class Mode { TYPE, POSITION, REGION }
+    enum class Mode { TYPE, POSITION }
 
     var mode: Mode = Mode.POSITION
-    var corner1: BlockPos? = null
-    var corner2: BlockPos? = null
-    var paintSound: Boolean = true
     var target: Block? = null
 
     /** Block position under the crosshair, or null if the player is not looking at a block. */
@@ -30,8 +27,6 @@ object PaintSelection {
     }
 
     fun reset() {
-        corner1 = null
-        corner2 = null
         target = null
     }
 }

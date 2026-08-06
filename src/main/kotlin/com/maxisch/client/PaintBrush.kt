@@ -1,11 +1,12 @@
 package com.maxisch.client
 
+import com.maxisch.paint.ApSettings
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 
 /**
  * Armed brush state. Pick a donor once, then paint blocks in the world without going back to the
- * menu. Purely client-side and not persisted - the rules it creates are.
+ * menu. Purely client-side; the rules it creates are what gets persisted.
  */
 object PaintBrush {
 
@@ -14,11 +15,12 @@ object PaintBrush {
 
     var enabled: Boolean = false
     var donor: Block? = null
-    var paintSound: Boolean = true
 
-    var radius: Int = MIN_RADIUS
+    /** Backed by settings so the chosen size survives a restart. */
+    var radius: Int
+        get() = ApSettings.brushRadius.coerceIn(MIN_RADIUS, MAX_RADIUS)
         set(value) {
-            field = value.coerceIn(MIN_RADIUS, MAX_RADIUS)
+            ApSettings.brushRadius = value.coerceIn(MIN_RADIUS, MAX_RADIUS)
         }
 
     val armed: Boolean
@@ -27,6 +29,7 @@ object PaintBrush {
     @JvmStatic
     fun adjustRadius(delta: Int): Int {
         radius += delta
+        ApSettings.save()
         return radius
     }
 
@@ -35,7 +38,8 @@ object PaintBrush {
         val reach = radius - 1
         if (reach == 0) return listOf(center.immutable())
 
-        val positions = ArrayList<BlockPos>((2 * reach + 1) * (2 * reach + 1) * (2 * reach + 1))
+        val side = 2 * reach + 1
+        val positions = ArrayList<BlockPos>(side * side * side)
         for (x in -reach..reach) {
             for (y in -reach..reach) {
                 for (z in -reach..reach) {

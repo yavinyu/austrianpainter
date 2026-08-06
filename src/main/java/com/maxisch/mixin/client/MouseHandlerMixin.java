@@ -1,7 +1,7 @@
 package com.maxisch.mixin.client;
 
 import com.maxisch.client.PaintBrush;
-import com.maxisch.client.PaintKeys;
+import com.maxisch.client.ckPaintKeys;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,7 +17,7 @@ public abstract class MouseHandlerMixin {
 
 	@Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
 	private void austrianpainter$resizeBrush(long window, double xOffset, double yOffset, CallbackInfo ci) {
-		if (yOffset == 0 || !PaintKeys.isBrushKeyDown()) {
+		if (yOffset == 0 || !ckPaintKeys.isBrushKeyDown()) {
 			return;
 		}
 
