@@ -1,153 +1,148 @@
 package com.maxisch.client.gui
 
+import com.maxisch.client.PaintBrush
 import com.maxisch.client.PaintSelection
-import com.maxisch.paint.PaintRule
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.PresetStores
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
-import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.core.BlockPos
-import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.block.Block
-import net.minecraft.world.level.block.Blocks
 
 /**
- * The paint menu: pick a texture donor on the left, review the rules that already exist on the
- * right, and apply one for the current mode.
+ * Rule manager. Picking blocks lives in [BlockPickerScreen] and options live in
+ * [ApSettingsScreen]; this screen only shows what is currently painted and lets you undo it.
+ *
+ * Positions are never listed one by one - a preset can hold tens of thousands - so positional paint
+ * is grouped by donor with a count. Removing a single position stays a world action: look at it and
+ * press the erase key.
  */
 class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title")) {
 
     private companion object {
-        const val CELL = 20
-        const val PANEL_MARGIN = 8
-        const val HEADER = 46
+        const val MARGIN = 8
+        const val HEADER = 62
         const val FOOTER = 56
-
-        val ALL_BLOCKS: List<Block> by lazy {
-            BuiltInRegistries.BLOCK.filter { it != Blocks.AIR }
-        }
+        const val ROW_HEIGHT = 14
     }
 
-    private var filtered: List<Block> = ALL_BLOCKS
-    private var scrollRow = 0
-    private var ruleScroll = 0
+    private sealed interface Row {
+        data class Type(val source: Block, val target: Block) : Row
+        data class Donor(val donor: Block, val count: Int) : Row
+    }
+
+    private var rows: List<Row> = emptyList()
+    private var scroll = 0
 
     /** Captured when the screen opens, because the crosshair is frozen while a screen is up. */
     private var lookedAtPos: BlockPos? = null
     private var lookedAtBlock: Block? = null
 
-    private lateinit var search: EditBox
-    private lateinit var soundButton: Button
+    private lateinit var brushButton: Button
     private lateinit var applyButton: Button
 
-    private val gridX get() = PANEL_MARGIN
-    private val gridY get() = HEADER
-    private val gridWidth get() = width / 2 - PANEL_MARGIN * 2
-    private val gridHeight get() = height - HEADER - FOOTER
-    private val gridColumns get() = (gridWidth / CELL).coerceAtLeast(1)
-    private val gridRows get() = (gridHeight / CELL).coerceAtLeast(1)
-
-    private val listX get() = width / 2 + PANEL_MARGIN
-    private val listWidth get() = width / 2 - PANEL_MARGIN * 2
-    private val rowHeight = 12
-    private val listRows get() = (gridHeight / rowHeight).coerceAtLeast(1)
+    private val listX get() = MARGIN
+    private val listY get() = HEADER
+    private val listWidth get() = width - MARGIN * 2
+    private val listRows get() = ((height - HEADER - FOOTER) / ROW_HEIGHT).coerceAtLeast(1)
 
     override fun init() {
         lookedAtPos = PaintSelection.lookedAtPos()
         lookedAtBlock = PaintSelection.lookedAtBlock()
 
-        search = addRenderableWidget(
-            EditBox(font, gridX, 22, gridWidth, 18, Component.translatable("austrianpainter.search")),
-        )
-        search.setHint(Component.translatable("austrianpainter.search"))
-        search.setResponder { applyFilter(it) }
-
-        var x = PANEL_MARGIN
+        var x = MARGIN
         for (mode in PaintSelection.Mode.entries) {
             addRenderableWidget(
                 Button.builder(Component.translatable("austrianpainter.mode.${mode.name.lowercase()}")) {
                     PaintSelection.mode = mode
-                    refreshButtons()
-                }.bounds(x, height - FOOTER + 6, 66, 20).build(),
+                    refresh()
+                }.bounds(x, height - FOOTER + 6, 74, 20).build(),
             )
-            x += 68
+            x += 76
         }
 
-        soundButton = addRenderableWidget(
-            Button.builder(soundLabel()) {
-                PaintSelection.paintSound = !PaintSelection.paintSound
-                soundButton.message = soundLabel()
-            }.bounds(x, height - FOOTER + 6, 96, 20).build(),
+        addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.pick_donor")) {
+                minecraft.setScreenAndShow(
+                    BlockPickerScreen(this) { block ->
+                        PaintSelection.target = block
+                        PaintBrush.donor = block
+                    },
+                )
+            }.bounds(x, height - FOOTER + 6, 110, 20).build(),
+        )
+        x += 112
+
+        brushButton = addRenderableWidget(
+            Button.builder(brushLabel()) {
+                PaintBrush.enabled = !PaintBrush.enabled
+                brushButton.message = brushLabel()
+            }.bounds(x, height - FOOTER + 6, 100, 20).build(),
         )
 
         applyButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.apply")) { apply() }
-                .bounds(PANEL_MARGIN, height - 26, 100, 20).build(),
+                .bounds(MARGIN, height - 26, 100, 20).build(),
         )
 
         addRenderableWidget(
-            Button.builder(Component.translatable("austrianpainter.clear_all")) {
+            Button.builder(Component.translatable("austrianpainter.clear_dimension")) {
                 PaintStorage.clearCurrentDimension()
-            }.bounds(PANEL_MARGIN + 104, height - 26, 100, 20).build(),
+                refresh()
+            }.bounds(MARGIN + 104, height - 26, 130, 20).build(),
+        )
+
+        addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.settings")) {
+                minecraft.setScreenAndShow(ApSettingsScreen.create(this))
+            }.bounds(width - MARGIN - 204, height - 26, 100, 20).build(),
         )
 
         addRenderableWidget(
             Button.builder(Component.translatable("gui.done")) { onClose() }
-                .bounds(width - PANEL_MARGIN - 100, height - 26, 100, 20).build(),
+                .bounds(width - MARGIN - 100, height - 26, 100, 20).build(),
         )
 
-        applyFilter(search.value)
-        refreshButtons()
+        refresh()
     }
 
-    private fun soundLabel(): Component = Component.translatable(
-        if (PaintSelection.paintSound) "austrianpainter.sound.on" else "austrianpainter.sound.off",
+    private fun brushLabel(): Component = Component.translatable(
+        if (PaintBrush.enabled) "austrianpainter.brush.button_on" else "austrianpainter.brush.button_off",
+        PaintBrush.radius,
     )
 
-    private fun refreshButtons() {
-        applyButton.active = pendingRule() != null
-    }
-
-    private fun applyFilter(query: String) {
-        val trimmed = query.trim().lowercase()
-        filtered = if (trimmed.isEmpty()) {
-            ALL_BLOCKS
-        } else {
-            ALL_BLOCKS.filter { block ->
-                BuiltInRegistries.BLOCK.getKey(block).toString().contains(trimmed) ||
-                    block.name.string.lowercase().contains(trimmed)
-            }
+    private fun refresh() {
+        rows = buildList {
+            PaintStorage.typeRules().forEach { (source, target) -> add(Row.Type(source, target)) }
+            PaintStorage.positionsByDonor().forEach { (donor, count) -> add(Row.Donor(donor, count)) }
         }
-        scrollRow = 0
+        scroll = scroll.coerceIn(0, (rows.size - listRows).coerceAtLeast(0))
+        applyButton.active = pendingIsValid()
     }
 
-    // ------------------------------------------------------------------ rules
+    // ------------------------------------------------------------------ apply
 
-    private fun pendingRule(): PaintRule? {
-        val target = PaintSelection.target ?: return null
-        val sound = PaintSelection.paintSound
+    private fun pendingIsValid(): Boolean {
+        if (PaintSelection.target == null) return false
         return when (PaintSelection.mode) {
-            PaintSelection.Mode.TYPE -> lookedAtBlock?.let { PaintRule.OfType(it, target, sound) }
-            PaintSelection.Mode.POSITION ->
-                (PaintSelection.corner1 ?: lookedAtPos)?.let { PaintRule.OfPos(it, target, sound) }
-
-            PaintSelection.Mode.REGION -> {
-                val a = PaintSelection.corner1 ?: return null
-                val b = PaintSelection.corner2 ?: return null
-                val rule = PaintRule.region(a, b, target, sound)
-                if (rule.volume > PaintRule.MAX_REGION_VOLUME) null else rule
-            }
+            PaintSelection.Mode.TYPE -> lookedAtBlock != null
+            PaintSelection.Mode.POSITION -> lookedAtPos != null
         }
     }
 
     private fun apply() {
-        val rule = pendingRule() ?: return
-        PaintStorage.add(rule)
-        refreshButtons()
+        val target = PaintSelection.target ?: return
+        when (PaintSelection.mode) {
+            PaintSelection.Mode.TYPE -> lookedAtBlock?.let { PaintStorage.setTypeRule(it, target) }
+            PaintSelection.Mode.POSITION -> lookedAtPos?.let {
+                PaintStorage.paintPositions(listOf(it), target)
+            }
+        }
+        refresh()
     }
 
     // ------------------------------------------------------------------ input
@@ -155,46 +150,27 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
     override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
         if (super.mouseClicked(event, doubled)) return true
 
-        blockAt(event.x, event.y)?.let {
-            PaintSelection.target = it
-            refreshButtons()
-            return true
+        when (val row = rowAt(event.x, event.y)) {
+            is Row.Type -> PaintStorage.removeTypeRule(row.source)
+            is Row.Donor -> PaintStorage.removeDonor(row.donor)
+            null -> return false
         }
-        ruleAt(event.x, event.y)?.let {
-            PaintStorage.remove(it)
-            return true
-        }
-        return false
+        refresh()
+        return true
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
         val delta = if (scrollY > 0) -1 else if (scrollY < 0) 1 else 0
         if (delta == 0) return false
-
-        if (mouseX < width / 2.0) {
-            val maxRow = ((filtered.size + gridColumns - 1) / gridColumns - gridRows).coerceAtLeast(0)
-            scrollRow = (scrollRow + delta).coerceIn(0, maxRow)
-        } else {
-            val maxRow = (PaintStorage.currentRules().size - listRows).coerceAtLeast(0)
-            ruleScroll = (ruleScroll + delta).coerceIn(0, maxRow)
-        }
+        scroll = (scroll + delta).coerceIn(0, (rows.size - listRows).coerceAtLeast(0))
         return true
     }
 
-    private fun blockAt(mouseX: Double, mouseY: Double): Block? {
-        val col = ((mouseX - gridX) / CELL).toInt()
-        val row = ((mouseY - gridY) / CELL).toInt()
-        if (mouseX < gridX || mouseY < gridY) return null
-        if (col !in 0 until gridColumns || row !in 0 until gridRows) return null
-        val index = (scrollRow + row) * gridColumns + col
-        return filtered.getOrNull(index)
-    }
-
-    private fun ruleAt(mouseX: Double, mouseY: Double): PaintRule? {
-        if (mouseX < listX || mouseX > listX + listWidth) return null
-        val row = ((mouseY - gridY) / rowHeight).toInt()
-        if (row !in 0 until listRows) return null
-        return PaintStorage.currentRules().getOrNull(ruleScroll + row)
+    private fun rowAt(mouseX: Double, mouseY: Double): Row? {
+        if (mouseX < listX || mouseX > listX + listWidth || mouseY < listY) return null
+        val index = ((mouseY - listY) / ROW_HEIGHT).toInt()
+        if (index !in 0 until listRows) return null
+        return rows.getOrNull(scroll + index)
     }
 
     // ------------------------------------------------------------------ render
@@ -203,108 +179,78 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
         super.extractRenderState(graphics, mouseX, mouseY, partialTick)
 
         graphics.centeredText(font, title, width / 2, 8, 0xFFFFFFFF.toInt())
-        drawContext(graphics)
-        drawGrid(graphics, mouseX, mouseY)
-        drawRules(graphics, mouseX, mouseY)
+
+        graphics.text(
+            font,
+            Component.translatable(
+                "austrianpainter.active_presets",
+                PresetStores.blocks.activeName,
+                PresetStores.types.activeName,
+            ),
+            MARGIN, 22, 0xFFA0A0A0.toInt(),
+        )
+        graphics.text(font, contextLine(), MARGIN, 34, 0xFFA0A0A0.toInt())
+        graphics.text(font, targetLine(), MARGIN, 46, 0xFFFFFF55.toInt())
+
+        drawRows(graphics, mouseX, mouseY)
     }
 
-    private fun drawContext(graphics: GuiGraphicsExtractor) {
-        val line = when (PaintSelection.mode) {
-            PaintSelection.Mode.TYPE -> lookedAtBlock?.let {
-                Component.translatable("austrianpainter.context.type", it.name)
-            } ?: Component.translatable("austrianpainter.context.none")
+    private fun contextLine(): Component = when (PaintSelection.mode) {
+        PaintSelection.Mode.TYPE -> lookedAtBlock?.let {
+            Component.translatable("austrianpainter.context.type", it.name)
+        } ?: Component.translatable("austrianpainter.context.none")
 
-            PaintSelection.Mode.POSITION -> (PaintSelection.corner1 ?: lookedAtPos)?.let {
-                Component.translatable("austrianpainter.context.pos", it.x, it.y, it.z)
-            } ?: Component.translatable("austrianpainter.context.none")
-
-            PaintSelection.Mode.REGION -> {
-                val a = PaintSelection.corner1
-                val b = PaintSelection.corner2
-                if (a == null || b == null) {
-                    Component.translatable("austrianpainter.context.corners")
-                } else {
-                    val rule = PaintRule.region(a, b, Blocks.STONE, false)
-                    Component.translatable("austrianpainter.context.region", rule.volume)
-                }
-            }
-        }
-        graphics.text(font, line, listX, 24, 0xFFA0A0A0.toInt())
-
-        val target = PaintSelection.target
-        val targetLine = if (target == null) {
-            Component.translatable("austrianpainter.context.no_target")
-        } else {
-            Component.translatable("austrianpainter.context.target", target.name)
-        }
-        graphics.text(font, targetLine, listX, 34, 0xFFFFFF55.toInt())
+        PaintSelection.Mode.POSITION -> lookedAtPos?.let {
+            Component.translatable("austrianpainter.context.pos", it.x, it.y, it.z)
+        } ?: Component.translatable("austrianpainter.context.none")
     }
 
-    private fun drawGrid(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
-        graphics.fill(gridX - 2, gridY - 2, gridX + gridColumns * CELL + 2, gridY + gridRows * CELL + 2, 0x60000000)
-        graphics.enableScissor(gridX, gridY, gridX + gridColumns * CELL, gridY + gridRows * CELL)
+    private fun targetLine(): Component = PaintSelection.target?.let {
+        Component.translatable("austrianpainter.context.target", it.name)
+    } ?: Component.translatable("austrianpainter.context.no_target")
 
-        for (row in 0 until gridRows) {
-            for (col in 0 until gridColumns) {
-                val block = filtered.getOrNull((scrollRow + row) * gridColumns + col) ?: continue
-                val x = gridX + col * CELL
-                val y = gridY + row * CELL
-                if (block == PaintSelection.target) {
-                    graphics.fill(x, y, x + CELL, y + CELL, 0x8055FF55.toInt())
-                } else if (mouseX in x until x + CELL && mouseY in y until y + CELL) {
-                    graphics.fill(x, y, x + CELL, y + CELL, 0x60FFFFFF)
-                }
-                val stack = ItemStack(block)
-                if (stack.isEmpty) {
-                    graphics.outline(x + 3, y + 3, CELL - 6, CELL - 6, 0xFF808080.toInt())
-                } else {
-                    graphics.item(stack, x + 2, y + 2)
-                }
-            }
-        }
-        graphics.disableScissor()
+    private fun drawRows(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
+        val listHeight = listRows * ROW_HEIGHT
+        graphics.fill(listX - 2, listY - 2, listX + listWidth + 2, listY + listHeight + 2, 0x60000000)
 
-        blockAt(mouseX.toDouble(), mouseY.toDouble())?.let {
-            graphics.setTooltipForNextFrame(it.name, mouseX, mouseY)
-        }
-    }
-
-    private fun drawRules(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
-        val rules = PaintStorage.currentRules()
-        graphics.fill(listX - 2, gridY - 2, listX + listWidth + 2, gridY + listRows * rowHeight + 2, 0x60000000)
-
-        if (rules.isEmpty()) {
-            graphics.text(font, Component.translatable("austrianpainter.rules.empty"), listX, gridY + 2, 0xFF808080.toInt())
+        if (rows.isEmpty()) {
+            graphics.text(
+                font,
+                Component.translatable("austrianpainter.rules.empty"),
+                listX + 2, listY + 3, 0xFF808080.toInt(),
+            )
             return
         }
 
-        graphics.enableScissor(listX, gridY, listX + listWidth, gridY + listRows * rowHeight)
-        for (row in 0 until listRows) {
-            val rule = rules.getOrNull(ruleScroll + row) ?: break
-            val y = gridY + row * rowHeight
-            val hovered = mouseX in listX..(listX + listWidth) && mouseY in y until y + rowHeight
-            if (hovered) graphics.fill(listX, y, listX + listWidth, y + rowHeight, 0x60FF5555)
-            graphics.text(font, describe(rule), listX + 2, y + 2, 0xFFFFFFFF.toInt())
+        graphics.enableScissor(listX, listY, listX + listWidth, listY + listHeight)
+        for (index in 0 until listRows) {
+            val row = rows.getOrNull(scroll + index) ?: break
+            val y = listY + index * ROW_HEIGHT
+            if (mouseX in listX..(listX + listWidth) && mouseY in y until y + ROW_HEIGHT) {
+                graphics.fill(listX, y, listX + listWidth, y + ROW_HEIGHT, 0x60FF5555)
+            }
+
+            val icon = when (row) {
+                is Row.Type -> row.target
+                is Row.Donor -> row.donor
+            }
+            val stack = ItemStack(icon)
+            if (!stack.isEmpty) graphics.item(stack, listX + 2, y - 1)
+
+            graphics.text(font, describe(row), listX + 22, y + 3, 0xFFFFFFFF.toInt())
         }
         graphics.disableScissor()
 
-        if (ruleAt(mouseX.toDouble(), mouseY.toDouble()) != null) {
-            graphics.setTooltipForNextFrame(Component.translatable("austrianpainter.rules.delete"), mouseX, mouseY)
+        if (rowAt(mouseX.toDouble(), mouseY.toDouble()) != null) {
+            graphics.setTooltipForNextFrame(
+                Component.translatable("austrianpainter.rules.delete"), mouseX, mouseY,
+            )
         }
     }
 
-    private fun describe(rule: PaintRule): Component = when (rule) {
-        is PaintRule.OfType -> Component.translatable(
-            "austrianpainter.rule.type", rule.source.name, rule.target.name,
-        )
-
-        is PaintRule.OfPos -> Component.translatable(
-            "austrianpainter.rule.pos", rule.pos.x, rule.pos.y, rule.pos.z, rule.target.name,
-        )
-
-        is PaintRule.OfRegion -> Component.translatable(
-            "austrianpainter.rule.region", rule.volume, rule.target.name,
-        )
+    private fun describe(row: Row): Component = when (row) {
+        is Row.Type -> Component.translatable("austrianpainter.rule.type", row.source.name, row.target.name)
+        is Row.Donor -> Component.translatable("austrianpainter.rule.donor", row.donor.name, row.count)
     }
 
     override fun isPauseScreen(): Boolean = false
