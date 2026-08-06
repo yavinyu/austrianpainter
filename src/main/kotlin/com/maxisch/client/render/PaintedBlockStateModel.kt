@@ -33,20 +33,48 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
     ) {
         val paint = PaintIndex.paintAt(pos, state)
         val finder = if (paint == null) null else PaintRenderSupport.blockSpriteFinder()
-        if (paint == null || finder == null) {
+        val donorPalette = if (paint == null || finder == null) null else RetexturePalette.of(paint)
+
+        // A donor that draws nothing itself - barrier, structure void, light - has no textures to
+        // lend, so the block is painted invisible instead. The block is still really there, so it
+        // keeps its collision and its selection outline, exactly like a barrier.
+        if (donorPalette != null && !donorPalette.usable) return
+
+        val palette = donorPalette
+
+        // Culling is decided from the real blocks, which paint contradicts: a stained glass block
+        // repainted as clear glass stops hiding the faces around it. That applies to every block
+        // next to paint, not just painted ones, so this runs whenever any paint exists at all.
+        val fixCulling = !PaintIndex.isEmpty
+
+        if (palette == null && !fixCulling) {
             super.emitQuads(emitter, level, pos, state, random, cullTest)
             return
         }
 
-        val palette = RetexturePalette.of(paint)
-        val paintedState = paint.defaultBlockState()
+        // The test has to be corrected as well as the quads: a face the test rejects is dropped
+        // before ever reaching the transform below.
+        val paintAwareCullTest = if (!fixCulling) {
+            cullTest
+        } else {
+            Predicate<Direction?> { direction ->
+                cullTest.test(direction) &&
+                    (direction == null || !PaintCulling.keepFace(level, pos, state, direction))
+            }
+        }
 
         emitter.pushTransform { quad ->
-            retexture(quad, palette, finder, paintedState, level, pos)
+            if (fixCulling) {
+                val culled = quad.cullFace()
+                if (culled != null && PaintCulling.keepFace(level, pos, state, culled)) {
+                    quad.cullFace(null)
+                }
+            }
+            if (palette != null) retexture(quad, palette, finder!!, paint!!.defaultBlockState(), level, pos)
             true
         }
         try {
-            super.emitQuads(emitter, level, pos, state, random, cullTest)
+            super.emitQuads(emitter, level, pos, state, random, paintAwareCullTest)
         } finally {
             emitter.popTransform()
         }
@@ -54,7 +82,8 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
 
     /**
      * Vanilla caches geometry across positions that share a key. A painted position must never
-     * reuse an unpainted neighbour's cached geometry, so opt out of the cache entirely there.
+     * reuse an unpainted neighbour's cached geometry, so opt out of the cache entirely there - and
+     * equally for a block merely next to paint, whose culling now depends on that paint.
      */
     override fun createGeometryKey(
         level: BlockAndTintGetter,
@@ -62,7 +91,15 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
         state: BlockState,
         random: RandomSource,
     ): Any? {
-        if (PaintIndex.paintAt(pos, state) != null) return null
+        if (!PaintIndex.isEmpty) {
+            if (PaintIndex.paintAt(pos, state) != null) return null
+
+            val cursor = BlockPos.MutableBlockPos()
+            for (direction in Direction.entries) {
+                cursor.setWithOffset(pos, direction)
+                if (PaintIndex.paintAt(cursor, level.getBlockState(cursor)) != null) return null
+            }
+        }
         return super.createGeometryKey(level, pos, state, random)
     }
 
@@ -73,7 +110,9 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
     ): Material.Baked {
         val paint = PaintIndex.paintAt(pos, state)
             ?: return super.particleMaterial(level, pos, state)
-        return RetexturePalette.of(paint).particle
+        val palette = RetexturePalette.of(paint)
+        if (!palette.usable) return super.particleMaterial(level, pos, state)
+        return palette.particle
     }
 
     override fun materialFlags(
@@ -84,7 +123,8 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
     ): Int {
         val base = super.materialFlags(level, pos, state, random)
         val paint = PaintIndex.paintAt(pos, state) ?: return base
-        return base or RetexturePalette.of(paint).materialFlags
+        val palette = RetexturePalette.of(paint)
+        return if (palette.usable) base or palette.materialFlags else base
     }
 
     private fun retexture(

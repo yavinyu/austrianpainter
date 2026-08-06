@@ -20,6 +20,13 @@ class RetexturePalette private constructor(
     val fallback: FaceMaterial,
     val particle: Material.Baked,
     val materialFlags: Int,
+    /**
+     * Whether the donor's model actually produced any quads to borrow textures from. Blocks that
+     * render nothing in the world - barrier, air, structure void, light - have none, and their
+     * particle sprite is not in the block atlas, so borrowing from them lands on an arbitrary
+     * region of it. Such a donor is refused rather than drawn wrong.
+     */
+    val usable: Boolean,
 ) {
 
     class FaceMaterial(val material: Material.Baked, val tintIndex: Int)
@@ -63,7 +70,7 @@ class RetexturePalette private constructor(
 
             val particle = model.particleMaterial()
             val fallback = first ?: FaceMaterial(particle, -1)
-            return RetexturePalette(perFace, fallback, particle, model.materialFlags())
+            return RetexturePalette(perFace, fallback, particle, model.materialFlags(), first != null)
         }
 
         private val CULL_FACES: Array<Direction?> =
