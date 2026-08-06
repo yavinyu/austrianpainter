@@ -26,7 +26,7 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
     private companion object {
         const val MARGIN = 8
         const val HEADER = 62
-        const val FOOTER = 56
+        const val FOOTER = 80
         const val ROW_HEIGHT = 14
     }
 
@@ -60,7 +60,7 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
                 Button.builder(Component.translatable("austrianpainter.mode.${mode.name.lowercase()}")) {
                     PaintSelection.mode = mode
                     refresh()
-                }.bounds(x, height - FOOTER + 6, 74, 20).build(),
+                }.bounds(x, height - FOOTER + 4, 74, 20).build(),
             )
             x += 76
         }
@@ -73,7 +73,7 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
                         PaintBrush.donor = block
                     },
                 )
-            }.bounds(x, height - FOOTER + 6, 110, 20).build(),
+            }.bounds(x, height - FOOTER + 4, 110, 20).build(),
         )
         x += 112
 
@@ -81,19 +81,25 @@ class PaintScreen : Screen(Component.translatable("austrianpainter.screen.title"
             Button.builder(brushLabel()) {
                 PaintBrush.enabled = !PaintBrush.enabled
                 brushButton.message = brushLabel()
-            }.bounds(x, height - FOOTER + 6, 100, 20).build(),
+            }.bounds(x, height - FOOTER + 4, 100, 20).build(),
         )
 
         applyButton = addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.apply")) { apply() }
-                .bounds(MARGIN, height - 26, 100, 20).build(),
+                .bounds(MARGIN, height - 52, 100, 20).build(),
         )
 
         addRenderableWidget(
             Button.builder(Component.translatable("austrianpainter.clear_dimension")) {
                 PaintStorage.clearCurrentDimension()
                 refresh()
-            }.bounds(MARGIN + 104, height - 26, 130, 20).build(),
+            }.bounds(MARGIN + 104, height - 52, 130, 20).build(),
+        )
+
+        addRenderableWidget(
+            Button.builder(Component.translatable("austrianpainter.area.open")) {
+                minecraft.setScreenAndShow(AreaReplaceScreen(this))
+            }.bounds(MARGIN + 238, height - 52, 130, 20).build(),
         )
 
         addRenderableWidget(
