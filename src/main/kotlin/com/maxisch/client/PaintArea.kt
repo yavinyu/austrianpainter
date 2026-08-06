@@ -91,10 +91,18 @@ object PaintArea {
         corner2 = null
     }
 
-    fun reset() {
+    /**
+     * Drops the box and what it was aimed at, but keeps the donor: picking a texture again after
+     * every selection would be tedious, and the donor is not part of the selection.
+     */
+    fun clearSelection() {
         clearCorners()
         source = null
         sourceAll = false
+    }
+
+    fun reset() {
+        clearSelection()
         donor = null
         lastApplied = emptyList()
     }

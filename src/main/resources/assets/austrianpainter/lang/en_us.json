@@ -6,6 +6,7 @@
   "key.austrianpainter.open_area": "Open area replace",
   "key.austrianpainter.corner_first": "Area: first corner",
   "key.austrianpainter.corner_second": "Area: second corner",
+  "key.austrianpainter.clear_area": "Area: clear selection",
 
   "austrianpainter.screen.title": "Block Painter",
   "austrianpainter.picker.title": "Choose a texture donor",
@@ -75,6 +76,7 @@
   "austrianpainter.area.rerolled": "Re-rolled %s blocks",
   "austrianpainter.area.clear_painted": "Clear painted in area",
   "austrianpainter.area.clear_selection": "Clear selection",
+  "austrianpainter.area.selection_cleared": "Area selection cleared",
   "austrianpainter.area.corner_first": "Corner 1 at %s, %s, %s",
   "austrianpainter.area.corner_second": "Corner 2 at %s, %s, %s",
   "austrianpainter.area.volume": "Area is %s blocks",
