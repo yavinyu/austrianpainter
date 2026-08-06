@@ -12,6 +12,12 @@ import net.minecraft.world.level.block.Block
  */
 class BlockPreset(
     val dimensions: MutableMap<ResourceKey<Level>, Long2ObjectOpenHashMap<Block>> = LinkedHashMap(),
+    /**
+     * Dungeon rooms, keyed by room name or `B<floor>` for a boss room. Coordinates here are
+     * relative to the room's marker corner with its rotation taken out, because a Catacombs room is
+     * placed somewhere else every run; see `com.maxisch.dungeon.RoomTransform`.
+     */
+    val rooms: MutableMap<String, Long2ObjectOpenHashMap<Block>> = LinkedHashMap(),
 ) {
     fun forDimension(dimension: ResourceKey<Level>): Long2ObjectOpenHashMap<Block> =
         dimensions.getOrPut(dimension) { Long2ObjectOpenHashMap() }
@@ -19,15 +25,24 @@ class BlockPreset(
     fun positionsIn(dimension: ResourceKey<Level>): Long2ObjectOpenHashMap<Block>? =
         dimensions[dimension]
 
-    val size: Int
-        get() = dimensions.values.sumOf { it.size }
+    fun forRoom(key: String): Long2ObjectOpenHashMap<Block> =
+        rooms.getOrPut(key) { Long2ObjectOpenHashMap() }
 
-    fun isEmpty(): Boolean = dimensions.values.all { it.isEmpty() }
+    fun positionsInRoom(key: String): Long2ObjectOpenHashMap<Block>? = rooms[key]
+
+    val size: Int
+        get() = dimensions.values.sumOf { it.size } + rooms.values.sumOf { it.size }
+
+    fun isEmpty(): Boolean =
+        dimensions.values.all { it.isEmpty() } && rooms.values.all { it.isEmpty() }
 
     fun copy(): BlockPreset {
         val copy = BlockPreset()
         for ((dimension, positions) in dimensions) {
             copy.dimensions[dimension] = Long2ObjectOpenHashMap(positions)
+        }
+        for ((room, positions) in rooms) {
+            copy.rooms[room] = Long2ObjectOpenHashMap(positions)
         }
         return copy
     }

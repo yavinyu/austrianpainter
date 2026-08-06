@@ -1,6 +1,9 @@
 package com.maxisch.client
 
+import com.maxisch.dungeon.DungeonLocation
+import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.PaintStorage
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.context.CommandContext
@@ -70,6 +73,9 @@ object PaintCommands {
                         ),
                     )
                     .then(
+                        ClientCommands.literal("room").executes { context -> roomStatus(context.source) },
+                    )
+                    .then(
                         ClientCommands.literal("sound").then(
                             ClientCommands.argument("enabled", BoolArgumentType.bool())
                                 .executes { context ->
@@ -102,6 +108,40 @@ object PaintCommands {
         PaintBrush.donor = block
         PaintBrush.enabled = true
         return status(context.source)
+    }
+
+    /** Diagnostics for the dungeon scope: without this the detection is invisible until it fails. */
+    private fun roomStatus(source: FabricClientCommandSource): Int {
+        feedback(
+            source,
+            "austrianpainter.room.data",
+            RoomDataStore.byCore.size,
+        )
+
+        if (!DungeonLocation.inDungeon) {
+            return feedback(source, "austrianpainter.room.no_dungeon")
+        }
+
+        feedback(
+            source,
+            "austrianpainter.room.floor",
+            DungeonLocation.floor ?: "?",
+            Component.translatable(
+                if (DungeonLocation.inBoss) "austrianpainter.room.in_boss" else "austrianpainter.room.in_rooms",
+            ),
+        )
+
+        val scope = PaintStorage.scope
+            ?: return feedback(source, "austrianpainter.room.unresolved")
+
+        return feedback(
+            source,
+            "austrianpainter.room.scope",
+            scope.key,
+            "${scope.origin.x}, ${scope.origin.z}",
+            scope.rotation,
+            PaintStorage.positionsByDonor().values.sum(),
+        )
     }
 
     private fun status(source: FabricClientCommandSource): Int {

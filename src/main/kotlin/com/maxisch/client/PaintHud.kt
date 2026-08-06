@@ -1,6 +1,7 @@
 package com.maxisch.client
 
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
@@ -27,6 +28,18 @@ object PaintHud : HudElement {
         if (client.level == null) return
 
         var y = 4
+        // Painting inside a dungeon room writes somewhere else entirely, so say so plainly.
+        PaintStorage.scope?.let { scope ->
+            graphics.text(
+                client.font,
+                Component.translatable("austrianpainter.hud.room", scope.key),
+                4,
+                y,
+                0xFF55FFFF.toInt(),
+            )
+            y += 10
+        }
+
         if (PaintBrush.enabled) {
             val donor = PaintBrush.donor
             val line = if (donor == null) {
