@@ -1,6 +1,6 @@
 package com.maxisch.paint
 
-import org.slf4j.LoggerFactory
+import com.maxisch.paint.ApLog.LOGGER
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.copyTo
@@ -22,8 +22,6 @@ class PresetStore<P : Any>(
     private val empty: () -> P,
     private val describe: (P) -> Int,
 ) {
-
-    private val logger = LoggerFactory.getLogger("austrianpainter")
 
     var activeName: String = ApSettings.DEFAULT_PRESET
         private set
@@ -58,12 +56,12 @@ class PresetStore<P : Any>(
         active = if (file.notExists()) {
             // A binding can outlive its file; fall back rather than leaving a half-loaded state.
             if (target != ApSettings.DEFAULT_PRESET) {
-                logger.warn("Preset '{}' is missing, creating it", target)
+                LOGGER.warn("Preset '{}' is missing, creating it", target)
             }
             empty()
         } else {
             runCatching { reader(file) }
-                .onFailure { logger.error("Could not load preset '{}'", target, it) }
+                .onFailure { LOGGER.error("Could not load preset '{}'", target, it) }
                 .getOrElse { empty() }
         }
 
@@ -75,11 +73,7 @@ class PresetStore<P : Any>(
         runCatching {
             ApPaths.ensureDirectories()
             writer(path(activeName), active)
-        }.onFailure { logger.error("Could not save preset '{}'", activeName, it) }
-    }
-
-    fun replaceActive(preset: P) {
-        active = preset
+        }.onFailure { LOGGER.error("Could not save preset '{}'", activeName, it) }
     }
 
     // ---------------------------------------------------------------- management
@@ -92,7 +86,7 @@ class PresetStore<P : Any>(
             ApPaths.ensureDirectories()
             writer(path(clean), empty())
         }.onFailure {
-            logger.error("Could not create preset '{}'", clean, it)
+            LOGGER.error("Could not create preset '{}'", clean, it)
             return null
         }
         return clean
@@ -104,7 +98,7 @@ class PresetStore<P : Any>(
         runCatching {
             path(from).copyTo(path(clean))
         }.onFailure {
-            logger.error("Could not duplicate preset '{}'", from, it)
+            LOGGER.error("Could not duplicate preset '{}'", from, it)
             return null
         }
         return clean
@@ -116,7 +110,7 @@ class PresetStore<P : Any>(
         runCatching {
             Files.move(path(from), path(clean))
         }.onFailure {
-            logger.error("Could not rename preset '{}'", from, it)
+            LOGGER.error("Could not rename preset '{}'", from, it)
             return null
         }
         if (activeName == from) activeName = clean
@@ -125,36 +119,5 @@ class PresetStore<P : Any>(
 
     fun delete(name: String): Boolean = runCatching {
         Files.deleteIfExists(path(name))
-    }.onFailure { logger.error("Could not delete preset '{}'", name, it) }.getOrDefault(false)
-}
-
-/** Which folder a preset name lives in; used when a rename has to fix up the bindings. */
-enum class PresetKind { BLOCKS, TYPES, PALETTES }
-
-/** The three preset folders. */
-object PresetStores {
-
-    val blocks = PresetStore(
-        folder = { ApPaths.blockConfig },
-        reader = PresetCodec::readBlocks,
-        writer = PresetCodec::writeBlocks,
-        empty = { BlockPreset() },
-        describe = { it.size },
-    )
-
-    val types = PresetStore(
-        folder = { ApPaths.blockTypeConfig },
-        reader = PresetCodec::readTypes,
-        writer = PresetCodec::writeTypes,
-        empty = { TypePreset() },
-        describe = { it.size },
-    )
-
-    val palettes = PresetStore(
-        folder = { ApPaths.paletteConfig },
-        reader = PresetCodec::readPalette,
-        writer = PresetCodec::writePalette,
-        empty = { PalettePreset() },
-        describe = { it.size },
-    )
+    }.onFailure { LOGGER.error("Could not delete preset '{}'", name, it) }.getOrDefault(false)
 }

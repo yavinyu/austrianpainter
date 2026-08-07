@@ -1,4 +1,4 @@
-package com.maxisch.client
+package com.maxisch.paint.session
 
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.Level

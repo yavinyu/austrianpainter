@@ -1,4 +1,4 @@
-package com.maxisch.paint
+package com.maxisch.client.render
 
 import java.util.concurrent.atomic.AtomicLong
 

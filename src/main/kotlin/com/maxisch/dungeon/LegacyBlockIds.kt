@@ -8,7 +8,7 @@ import net.minecraft.world.level.block.state.BlockState
 /**
  * Pre-flattening block ids for the blocks a Catacombs room can be built out of.
  *
- * Room identification hashes a column of ids (see [RoomScanner.core]), and the hashes in
+ * Room identification hashes a column of ids (see [WorldProbe.coreHash]), and the hashes in
  * `rooms.json` were produced on 1.8 block ids. Any deviation from this table - a different id, a
  * missing entry, a different state suffix - changes the hash and the room stops being recognised,
  * so this mirrors NoammAddons' table exactly rather than trying to be clever.

@@ -5,18 +5,11 @@ import com.maxisch.paint.PaintStorage
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 
-/**
- * Which room's paint is currently live.
- *
- * A scope is only handed out once the room is oriented, so paint can never bind to a room that is
- * still half scanned and end up stored against the wrong corner.
- */
-data class RoomScope(val key: String, val origin: BlockPos, val rotation: Int)
-
+/** Drives the dungeon subsystem once a tick and hands [PaintStorage] the room in scope. */
 object RoomTracker {
 
-    var scope: RoomScope? = null
-        private set
+    /** Private on purpose: [PaintStorage.scope] is the one every other package reads. */
+    private var scope: RoomScope? = null
 
     private var wasInDungeon = false
 

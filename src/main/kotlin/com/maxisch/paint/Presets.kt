@@ -35,17 +35,6 @@ class BlockPreset(
 
     fun isEmpty(): Boolean =
         dimensions.values.all { it.isEmpty() } && rooms.values.all { it.isEmpty() }
-
-    fun copy(): BlockPreset {
-        val copy = BlockPreset()
-        for ((dimension, positions) in dimensions) {
-            copy.dimensions[dimension] = Long2ObjectOpenHashMap(positions)
-        }
-        for ((room, positions) in rooms) {
-            copy.rooms[room] = Long2ObjectOpenHashMap(positions)
-        }
-        return copy
-    }
 }
 
 /** Whole-block-type paint: every block of the key type renders as the value type, everywhere. */
@@ -56,8 +45,6 @@ class TypePreset(
         get() = map.size
 
     fun isEmpty(): Boolean = map.isEmpty()
-
-    fun copy(): TypePreset = TypePreset(LinkedHashMap(map))
 }
 
 /**
@@ -78,8 +65,6 @@ class PalettePreset(
     fun isEmpty(): Boolean = weights.isEmpty()
 
     fun totalWeight(): Int = weights.values.sum()
-
-    fun copy(): PalettePreset = PalettePreset(LinkedHashMap(weights))
 
     /** Cumulative weights, built once per apply rather than per position. Null while empty. */
     fun picker(): Picker? {

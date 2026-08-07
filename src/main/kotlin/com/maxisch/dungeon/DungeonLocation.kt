@@ -32,9 +32,6 @@ object DungeonLocation {
     var inBoss: Boolean = false
         private set
 
-    val isMaster: Boolean
-        get() = floor?.startsWith("M") == true
-
     /**
      * Pretends the player is on this floor no matter what the scoreboard says, so the feature can
      * be built and tested on a server that does not send Hypixel's sidebar. Null is the normal

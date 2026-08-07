@@ -15,10 +15,6 @@ data class RoomData(
     /** Column hashes, one per 32x32 tile the prefab occupies, in no particular order. */
     val cores: List<Int> = emptyList(),
 ) {
-    companion object {
-        fun unknown(): RoomData = RoomData("Unknown", RoomType.NORMAL, RoomShape.UNKNOWN)
-    }
-
     fun isUnknown(): Boolean = name == "Unknown" && shape == RoomShape.UNKNOWN
 }
 

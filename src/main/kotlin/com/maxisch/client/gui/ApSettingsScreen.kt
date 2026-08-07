@@ -1,10 +1,11 @@
 package com.maxisch.client.gui
 
-import com.maxisch.client.PaintBrush
+import com.maxisch.client.KeyHints
 import com.maxisch.dungeon.RoomScanner
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
+import com.maxisch.paint.session.PaintBrush
 import dev.isxander.yacl3.api.ButtonOption
 import dev.isxander.yacl3.api.ConfigCategory
 import dev.isxander.yacl3.api.Option
@@ -20,7 +21,7 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 import java.awt.Color
 
-/** The YACL settings screen. Preset creation and deletion live in [PresetScreen]. */
+/** The YACL settings screen. Preset creation and deletion live in the painter's Presets tab. */
 object ApSettingsScreen {
 
     fun create(parent: Screen?): Screen {
@@ -55,6 +56,18 @@ object ApSettingsScreen {
                             )
                             .option(
                                 Option.createBuilder<Boolean>()
+                                    .name(Component.translatable("austrianpainter.settings.show_hints"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.show_hints.desc"),
+                                        ),
+                                    )
+                                    .binding(true, { ApSettings.showHints }, { ApSettings.showHints = it })
+                                    .controller { TickBoxControllerBuilder.create(it) }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Boolean>()
                                     .name(Component.translatable("austrianpainter.settings.paint_sound"))
                                     .description(
                                         OptionDescription.of(
@@ -70,7 +83,13 @@ object ApSettingsScreen {
                                     .name(Component.translatable("austrianpainter.settings.brush_radius"))
                                     .description(
                                         OptionDescription.of(
-                                            Component.translatable("austrianpainter.settings.brush_radius.desc"),
+                                            // The cube side is derived, not written into the string:
+                                            // changing MAX_RADIUS used to leave this quietly lying.
+                                            Component.translatable(
+                                                "austrianpainter.settings.brush_radius.desc",
+                                                2 * PaintBrush.MAX_RADIUS - 1,
+                                            ),
+                                            KeyHints.resizeHint(),
                                         ),
                                     )
                                     .binding(
@@ -207,7 +226,7 @@ object ApSettingsScreen {
                                 ButtonOption.createBuilder()
                                     .name(Component.translatable("austrianpainter.settings.manage_blocks"))
                                     .action { screen, _ ->
-                                        Minecraft.getInstance().setScreenAndShow(PresetScreen.blocks(screen))
+                                        PainterScreen.openPresets(screen)
                                     }
                                     .build(),
                             )
@@ -240,7 +259,7 @@ object ApSettingsScreen {
                                 ButtonOption.createBuilder()
                                     .name(Component.translatable("austrianpainter.settings.manage_types"))
                                     .action { screen, _ ->
-                                        Minecraft.getInstance().setScreenAndShow(PresetScreen.types(screen))
+                                        PainterScreen.openPresets(screen)
                                     }
                                     .build(),
                             )
@@ -273,7 +292,7 @@ object ApSettingsScreen {
                                 ButtonOption.createBuilder()
                                     .name(Component.translatable("austrianpainter.settings.manage_palettes"))
                                     .action { screen, _ ->
-                                        Minecraft.getInstance().setScreenAndShow(PresetScreen.palettes(screen))
+                                        PainterScreen.openPresets(screen)
                                     }
                                     .build(),
                             )

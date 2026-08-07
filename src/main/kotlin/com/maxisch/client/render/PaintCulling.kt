@@ -1,6 +1,5 @@
 package com.maxisch.client.render
 
-import com.maxisch.paint.CullDiagnostics
 import com.maxisch.paint.PaintIndex
 import net.minecraft.client.renderer.block.BlockAndTintGetter
 import net.minecraft.core.BlockPos

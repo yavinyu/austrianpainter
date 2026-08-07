@@ -1,9 +1,9 @@
 package com.maxisch.dungeon
 
-import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.maxisch.paint.ApJson
+import com.maxisch.paint.ApLog.LOGGER
 import com.maxisch.paint.ApPaths
-import org.slf4j.LoggerFactory
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,9 +28,6 @@ object RoomDataStore {
     private const val DOWNLOAD_URL = "https://api.noamm.org/na/data/download"
     private const val USER_AGENT = "austrianpainter-RoomDataStore"
     private const val TIMEOUT_MS = 15_000
-
-    private val LOGGER = LoggerFactory.getLogger("austrianpainter")
-    private val GSON = Gson()
 
     @Volatile
     var byCore: Map<Int, RoomData> = emptyMap()
@@ -74,7 +71,7 @@ object RoomDataStore {
 
         runCatching {
             val type = object : TypeToken<List<RoomData>>() {}.type
-            val rooms: List<RoomData> = GSON.fromJson(roomsFile.readText(), type)
+            val rooms: List<RoomData> = ApJson.PLAIN.fromJson(roomsFile.readText(), type)
 
             val index = HashMap<Int, RoomData>()
             for (room in rooms) {
