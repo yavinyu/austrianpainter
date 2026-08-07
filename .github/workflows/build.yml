@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v5
 
       # Minecraft 26.x demands Java 25, which is also the java toolchain the build targets.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 25
@@ -36,7 +36,7 @@ jobs:
       - name: Build
         run: ./gradlew build -Dorg.gradle.java.home="$JAVA_HOME" --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: austrianpainter-jar
           path: build/libs/*.jar
@@ -45,7 +45,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-reports
           path: build/reports/tests/test/**
