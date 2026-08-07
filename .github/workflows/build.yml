@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Minecraft 26.x demands Java 25, which is also the java toolchain the build targets.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # Caches ~/.gradle/caches, which is where loom keeps the downloaded Minecraft jars and assets
+      # too - by far the slowest part of a cold build.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # gradle.properties pins org.gradle.java.home to a Windows path so loom finds a JDK 25 on the
+      # developer's machine. A command-line system property outranks it, which is what points Gradle
+      # at the JDK setup-java just installed.
+      - name: Build
+        run: ./gradlew build -Dorg.gradle.java.home="$JAVA_HOME" --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: austrianpainter-jar
+          path: build/libs/*.jar
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: build/reports/tests/test/**
+          retention-days: 7
+          if-no-files-found: ignore
