@@ -2,6 +2,7 @@ package com.maxisch.paint
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.maxisch.paint.ApLog.LOGGER
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap
 import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.BuiltInRegistries
@@ -10,7 +11,6 @@ import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
-import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.notExists
@@ -25,8 +25,6 @@ import kotlin.io.path.writeText
  * alternative - refusing to load - would lose someone's whole palette over one typo.
  */
 object PresetCodec {
-
-    private val LOGGER = LoggerFactory.getLogger("austrianpainter")
 
     // ---------------------------------------------------------------- positional
 
@@ -191,10 +189,8 @@ object PresetCodec {
             )
         }
         path.createParentDirectories()
-        path.writeText(GSON.toJson(root) + "\n")
+        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
     }
-
-    private val GSON = com.google.gson.GsonBuilder().setPrettyPrinting().create()
 
     // ---------------------------------------------------------------- palettes
 
@@ -224,7 +220,7 @@ object PresetCodec {
             root.addProperty(BuiltInRegistries.BLOCK.getKey(block).toString(), weight)
         }
         path.createParentDirectories()
-        path.writeText(GSON.toJson(root) + "\n")
+        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
     }
 
     // ---------------------------------------------------------------- shared

@@ -1,6 +1,6 @@
 package com.maxisch.client.render
 
-import com.maxisch.client.PaintArea
+import com.maxisch.paint.session.PaintArea
 import com.maxisch.paint.ApSettings
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.minecraft.client.Minecraft

@@ -16,9 +16,9 @@ import net.minecraft.world.level.block.Blocks
  * that screen, so both the rule manager and the brush can share one picker.
  */
 class BlockPickerScreen(
-    private val parent: Screen?,
+    parent: Screen?,
     private val onPick: (Block) -> Unit,
-) : Screen(Component.translatable("austrianpainter.picker.title")) {
+) : ApScreen(Component.translatable("austrianpainter.picker.title"), parent) {
 
     private companion object {
         const val CELL = 20
@@ -57,11 +57,6 @@ class BlockPickerScreen(
 
         applyFilter(search.value)
         setInitialFocus(search)
-    }
-
-    override fun onClose() {
-        val target = parent
-        if (target == null) super.onClose() else minecraft.setScreenAndShow(target)
     }
 
     private fun applyFilter(query: String) {
@@ -138,6 +133,4 @@ class BlockPickerScreen(
             graphics.setTooltipForNextFrame(it.name, mouseX, mouseY)
         }
     }
-
-    override fun isPauseScreen(): Boolean = false
 }

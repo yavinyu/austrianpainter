@@ -2,6 +2,7 @@ package com.maxisch.paint
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.maxisch.paint.ApLog.LOGGER
 import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.core.registries.Registries
@@ -9,7 +10,6 @@ import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
-import org.slf4j.LoggerFactory
 import kotlin.io.path.extension
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.nameWithoutExtension
@@ -28,8 +28,6 @@ import kotlin.io.path.readText
  * copy of their rules on the strength of it is not a trade worth making.
  */
 object LegacyMigration {
-
-    private val LOGGER = LoggerFactory.getLogger("austrianpainter")
 
     fun run() {
         val legacy = ApPaths.legacyConfig

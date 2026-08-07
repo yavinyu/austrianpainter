@@ -1,9 +1,12 @@
-package com.maxisch.client
+package com.maxisch.client.render
 
+import com.maxisch.client.KeyHints
 import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
+import com.maxisch.paint.session.PaintArea
+import com.maxisch.paint.session.PaintBrush
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
@@ -56,6 +59,12 @@ object PaintHud : HudElement {
             }
             graphics.text(client.font, line, 4, y, 0xFFFFFF55.toInt())
             y += 10
+
+            // Nothing else advertises the hold-and-scroll resize, so say it where the brush is.
+            if (ApSettings.showHints) {
+                graphics.text(client.font, KeyHints.resizeHint(), 4, y, 0xFF808080.toInt())
+                y += 10
+            }
         }
 
         areaLine()?.let { graphics.text(client.font, it, 4, y, 0xFFFFAA55.toInt()) }

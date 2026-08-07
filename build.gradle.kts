@@ -27,13 +27,6 @@ java {
     withSourcesJar()
 }
 
-
-fabricApi {
-    configureDataGeneration {
-        client = true
-    }
-}
-
 loom {
     runs {
         named("client") {
@@ -91,12 +84,6 @@ repositories {
             artifact()
         }
     }
-
-    // Add repositories to retrieve artifacts from in here.
-    // You should only use this when depending on other mods because
-    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-    // for more information about repositories.
 }
 
 dependencies {
@@ -141,6 +128,15 @@ dependencies {
     // parameter 'redirect_uri' is not valid". DevLogin uses the device-code flow, which has no
     // redirect URI to go stale.
     localRuntime("net.covers1624:DevLogin:${project.property("devlogin_version")}")
+
+    // Tests cover only the pure logic that needs no Minecraft registry bootstrap - see src/test.
+    testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.processResources {
@@ -213,11 +209,8 @@ publishing {
         }
     }
 
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+    // Nothing publishes anywhere yet; add a target here if that ever changes. This block is not the
+    // same as the top-level `repositories` - that one is where dependencies come from.
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
     }
 }

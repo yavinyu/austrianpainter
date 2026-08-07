@@ -1,9 +1,8 @@
 package com.maxisch.paint
 
-import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import org.slf4j.LoggerFactory
+import com.maxisch.paint.ApLog.LOGGER
 import kotlin.io.path.notExists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -13,9 +12,6 @@ data class WorldBinding(var blocks: String, var types: String)
 
 /** `config/ap/settings.json`. */
 object ApSettings {
-
-    private val LOGGER = LoggerFactory.getLogger("austrianpainter")
-    private val GSON = GsonBuilder().setPrettyPrinting().create()
 
     const val DEFAULT_PRESET = "default"
 
@@ -31,6 +27,12 @@ object ApSettings {
     var paintSound: Boolean = true
     var showHud: Boolean = true
 
+    /** Adds the brush-resize gesture to the HUD; on until the player turns it off. */
+    var showHints: Boolean = true
+
+    /** Whether the one-time "press X to open the paint menu" chat line has already been sent. */
+    var seenIntro: Boolean = false
+
     /** Master switch for the Catacombs room scope; off means paint is always world-absolute. */
     var dungeonRoomScope: Boolean = true
 
@@ -44,8 +46,6 @@ object ApSettings {
     private val roomTypePresets = LinkedHashMap<String, String>()
 
     fun roomTypePresetFor(scopeKey: String): String? = roomTypePresets[scopeKey]
-
-    fun boundRoomKeys(): Set<String> = roomTypePresets.keys.toSet()
 
     fun bindRoomTypes(scopeKey: String, preset: String?) {
         if (preset == null) roomTypePresets.remove(scopeKey) else roomTypePresets[scopeKey] = preset
@@ -112,6 +112,9 @@ object ApSettings {
             brushRadius = root.get("brushRadius")?.asInt ?: 1
             paintSound = root.get("paintSound")?.asBoolean ?: true
             showHud = root.get("showHud")?.asBoolean ?: true
+            showHints = root.get("showHints")?.asBoolean ?: true
+            // Defaults false so configs written before the hint existed still get it once.
+            seenIntro = root.get("seenIntro")?.asBoolean ?: false
             dungeonRoomScope = root.get("dungeonRoomScope")?.asBoolean ?: true
             areaOutlineColor = root.get("areaOutlineColor")?.asInt ?: DEFAULT_AREA_OUTLINE
             areaFillColor = root.get("areaFillColor")?.asInt ?: DEFAULT_AREA_FILL
@@ -140,6 +143,8 @@ object ApSettings {
             addProperty("brushRadius", brushRadius)
             addProperty("paintSound", paintSound)
             addProperty("showHud", showHud)
+            addProperty("showHints", showHints)
+            addProperty("seenIntro", seenIntro)
             addProperty("dungeonRoomScope", dungeonRoomScope)
             addProperty("areaOutlineColor", areaOutlineColor)
             addProperty("areaFillColor", areaFillColor)
@@ -163,7 +168,7 @@ object ApSettings {
 
         runCatching {
             ApPaths.ensureDirectories()
-            ApPaths.settingsFile.writeText(GSON.toJson(root) + "\n")
+            ApPaths.settingsFile.writeText(ApJson.PRETTY.toJson(root) + "\n")
         }.onFailure { LOGGER.error("Could not write {}", ApPaths.settingsFile, it) }
     }
 

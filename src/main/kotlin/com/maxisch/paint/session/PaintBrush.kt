@@ -1,4 +1,4 @@
-package com.maxisch.client
+package com.maxisch.paint.session
 
 import com.maxisch.paint.ApSettings
 import net.minecraft.core.BlockPos
@@ -22,9 +22,6 @@ object PaintBrush {
         set(value) {
             ApSettings.brushRadius = value.coerceIn(MIN_RADIUS, MAX_RADIUS)
         }
-
-    val armed: Boolean
-        get() = enabled && donor != null
 
     @JvmStatic
     fun adjustRadius(delta: Int): Int {

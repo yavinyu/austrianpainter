@@ -1,10 +1,11 @@
 package com.maxisch.client
 
+import com.maxisch.client.render.CullDiagnostics
 import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.paint.ApSettings
-import com.maxisch.paint.CullDiagnostics
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.session.PaintBrush
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
@@ -15,6 +16,7 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import net.minecraft.commands.SharedSuggestionProvider
 import net.minecraft.commands.arguments.IdentifierArgument
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.block.Block
@@ -76,6 +78,12 @@ object PaintCommands {
                     )
                     .then(
                         ClientCommands.literal("room").executes { context -> roomStatus(context.source) },
+                    )
+                    .then(
+                        ClientCommands.literal("undo").executes { context ->
+                            context.source.sendFeedback(PaintStorage.undo())
+                            1
+                        },
                     )
                     .then(
                         ClientCommands.literal("cull").executes { context ->
@@ -175,7 +183,17 @@ object PaintCommands {
         )
 
         if (DungeonLocation.forced) {
-            feedback(source, "austrianpainter.room.forced", DungeonLocation.forcedFloor ?: "?")
+            // A command name is not rebindable, so there is nothing to substitute - but making it
+            // one click instead of one retype is the actual win here.
+            source.sendFeedback(
+                Component.translatable(
+                    "austrianpainter.room.forced",
+                    DungeonLocation.forcedFloor ?: "?",
+                ).withStyle { style ->
+                    style.withUnderlined(true)
+                        .withClickEvent(ClickEvent.SuggestCommand("/paintbrush dungeon off"))
+                },
+            )
         }
 
         if (!DungeonLocation.inDungeon) {
