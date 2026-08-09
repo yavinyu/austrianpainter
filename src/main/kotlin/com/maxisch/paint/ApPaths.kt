@@ -17,6 +17,20 @@ object ApPaths {
     val blockConfig: Path
         get() = root.resolve("block-config")
 
+    /** Dungeon-room paint, its own preset kind independent of world and boss paint. */
+    val roomConfig: Path
+        get() = root.resolve("room-config")
+
+    /** Boss-room paint, its own preset kind independent of world and dungeon-room paint. */
+    val blockBossConfig: Path
+        get() = root.resolve("block-boss-config")
+
+    /**
+     * Where a leftover `rooms`/boss entry from a pre-split block-config file migrates to, matched
+     * by filename. Only used by the one-time migration in `PresetCodec.readBlocks`.
+     */
+    fun blockBossFileFor(blockConfigFile: Path): Path = blockBossConfig.resolve(blockConfigFile.fileName)
+
     /** Whole-block-type presets, one flat source-to-donor map per file. */
     val blockTypeConfig: Path
         get() = root.resolve("block-type-config")
@@ -39,6 +53,8 @@ object ApPaths {
     fun ensureDirectories() {
         root.createDirectories()
         blockConfig.createDirectories()
+        roomConfig.createDirectories()
+        blockBossConfig.createDirectories()
         blockTypeConfig.createDirectories()
         paletteConfig.createDirectories()
         dataDir.createDirectories()

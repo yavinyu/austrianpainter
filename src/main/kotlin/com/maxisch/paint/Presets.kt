@@ -12,12 +12,6 @@ import net.minecraft.world.level.block.Block
  */
 class BlockPreset(
     val dimensions: MutableMap<ResourceKey<Level>, Long2ObjectOpenHashMap<Block>> = LinkedHashMap(),
-    /**
-     * Dungeon rooms, keyed by room name or `B<floor>` for a boss room. Coordinates here are
-     * relative to the room's marker corner with its rotation taken out, because a Catacombs room is
-     * placed somewhere else every run; see `com.maxisch.dungeon.RoomTransform`.
-     */
-    val rooms: MutableMap<String, Long2ObjectOpenHashMap<Block>> = LinkedHashMap(),
 ) {
     fun forDimension(dimension: ResourceKey<Level>): Long2ObjectOpenHashMap<Block> =
         dimensions.getOrPut(dimension) { Long2ObjectOpenHashMap() }
@@ -25,16 +19,32 @@ class BlockPreset(
     fun positionsIn(dimension: ResourceKey<Level>): Long2ObjectOpenHashMap<Block>? =
         dimensions[dimension]
 
-    fun forRoom(key: String): Long2ObjectOpenHashMap<Block> =
-        rooms.getOrPut(key) { Long2ObjectOpenHashMap() }
+    val size: Int
+        get() = dimensions.values.sumOf { it.size }
 
-    fun positionsInRoom(key: String): Long2ObjectOpenHashMap<Block>? = rooms[key]
+    fun isEmpty(): Boolean = dimensions.values.all { it.isEmpty() }
+}
+
+/**
+ * Positional paint keyed by a room-scope key rather than a dimension - used for both dungeon-room
+ * presets (keyed by room name) and boss-room presets (keyed `B<floor>`), which are structurally
+ * identical and differ only in which folder and key domain they live in. Coordinates for dungeon
+ * rooms are relative to the room's marker corner with its rotation taken out, because a Catacombs
+ * room is placed somewhere else every run; see `com.maxisch.dungeon.RoomTransform`. Coordinates for
+ * boss rooms are plain world coordinates, since a boss room sits at fixed coordinates every run.
+ */
+class RoomBlockPreset(
+    val positions: MutableMap<String, Long2ObjectOpenHashMap<Block>> = LinkedHashMap(),
+) {
+    fun forKey(key: String): Long2ObjectOpenHashMap<Block> =
+        positions.getOrPut(key) { Long2ObjectOpenHashMap() }
+
+    fun positionsFor(key: String): Long2ObjectOpenHashMap<Block>? = positions[key]
 
     val size: Int
-        get() = dimensions.values.sumOf { it.size } + rooms.values.sumOf { it.size }
+        get() = positions.values.sumOf { it.size }
 
-    fun isEmpty(): Boolean =
-        dimensions.values.all { it.isEmpty() } && rooms.values.all { it.isEmpty() }
+    fun isEmpty(): Boolean = positions.values.all { it.isEmpty() }
 }
 
 /** Whole-block-type paint: every block of the key type renders as the value type, everywhere. */

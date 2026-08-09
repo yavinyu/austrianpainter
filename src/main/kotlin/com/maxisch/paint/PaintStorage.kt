@@ -38,6 +38,10 @@ object PaintStorage {
 
     fun activateBlockPreset(name: String) = PaintSession.activateBlockPreset(name)
 
+    fun activateRoomPreset(name: String) = PaintSession.activateRoomPreset(name)
+
+    fun activateBossPreset(name: String) = PaintSession.activateBossPreset(name)
+
     fun activateTypePreset(name: String) = PaintSession.activateTypePreset(name)
 
     fun activatePalette(name: String) = PaintSession.activatePalette(name)
