@@ -12,8 +12,8 @@ import kotlin.io.path.notExists
 /**
  * One folder of presets and whichever of them is currently loaded.
  *
- * Generic over the preset type so the positional and block-type folders share every bit of this;
- * see [PresetStores] for the two instances.
+ * Generic over the preset type so every preset kind shares every bit of this; see [PresetStores]
+ * for the five instances.
  */
 class PresetStore<P : Any>(
     private val folder: () -> Path,

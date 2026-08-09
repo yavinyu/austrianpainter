@@ -42,7 +42,7 @@ object RoomTracker {
 
         val floor = DungeonLocation.floorNumber ?: return null
         // Master mode shares the floor's boss config; the layouts are identical.
-        if (DungeonLocation.inBoss) return RoomScope("B$floor", BlockPos.ZERO, 0)
+        if (DungeonLocation.inBoss) return RoomScope("B$floor", BlockPos.ZERO, 0, isBoss = true)
 
         RoomScanner.tick()
 
@@ -50,6 +50,6 @@ object RoomTracker {
         val room = RoomScanner.roomAt(player.position()) ?: return null
         val origin = room.clayPos ?: return null
         val rotation = room.rotation ?: return null
-        return RoomScope(room.name, origin, 360 - rotation)
+        return RoomScope(room.name, origin, 360 - rotation, isBoss = false)
     }
 }

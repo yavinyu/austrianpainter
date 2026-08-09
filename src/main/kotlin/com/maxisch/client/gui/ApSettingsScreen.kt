@@ -201,7 +201,10 @@ object ApSettingsScreen {
                                         ),
                                     )
                                     .action { _, _ ->
-                                        PaintStorage.scope?.key?.let { ApSettings.bindRoomBlocks(it, null) }
+                                        PaintStorage.scope?.let {
+                                            if (it.isBoss) ApSettings.bindBossPreset(it.key, null)
+                                            else ApSettings.bindRoomPreset(it.key, null)
+                                        }
                                     }
                                     .build(),
                             )

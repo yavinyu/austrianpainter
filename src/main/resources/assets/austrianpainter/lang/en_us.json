@@ -173,6 +173,8 @@
   "austrianpainter.settings.active_palette.desc": "Which donor palette an area replace draws from. Shared by every world.",
 
   "austrianpainter.presets.blocks": "Block presets",
+  "austrianpainter.presets.rooms": "Dungeon-room presets",
+  "austrianpainter.presets.bosses": "Boss-room presets",
   "austrianpainter.presets.types": "Block-type presets",
   "austrianpainter.presets.palettes": "Donor palettes",
   "austrianpainter.presets.name": "Preset name",
