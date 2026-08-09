@@ -31,16 +31,16 @@ object PresetCodec {
     private const val DIMENSIONS = "dimensions"
     private const val ROOMS = "rooms"
 
+    private val BOSS_KEY = Regex("^B\\d+$")
+
     /**
      * ```
-     * {
-     *   "dimensions": { "minecraft:overworld": { "minecraft:black_concrete_powder": ["112,15,0"] } },
-     *   "rooms":      { "Water Board":        { "minecraft:black_concrete_powder": ["3,70,-5"] } }
-     * }
+     * { "dimensions": { "minecraft:overworld": { "minecraft:black_concrete_powder": ["112,15,0"] } } }
      * ```
      *
      * Files written before rooms existed are a bare dimension map with no wrapper, so a root
-     * without either section is read as one.
+     * without a `dimensions` section is read as one. A leftover `rooms` section is from before
+     * dungeon-room and boss-room paint got their own preset kinds - see [migrateLegacyRooms].
      */
     fun readBlocks(path: Path): BlockPreset {
         val preset = BlockPreset()
@@ -55,14 +55,40 @@ object PresetCodec {
 
         if (dimensions == null && rooms == null) {
             readDimensions(root, preset, path)
-            return preset
-        }
-
-        dimensions?.let { readDimensions(it, preset, path) }
-        rooms?.entrySet()?.forEach { (room, donors) ->
-            readDonors(donors.asJsonObject, preset.forRoom(room), path)
+        } else {
+            dimensions?.let { readDimensions(it, preset, path) }
+            rooms?.let { migrateLegacyRooms(it, path) }
         }
         return preset
+    }
+
+    /**
+     * One-time migration for a file written before dungeon-room and boss-room paint became their
+     * own preset kinds: splits a leftover `rooms` object by key shape into the Rooms store
+     * (`room-config`) or the Bosses store (`block-boss-config`), matched by this file's name - but
+     * only when that target preset has no content yet, so a Rooms/Bosses preset someone already
+     * started under the new kind is never overwritten by stale pre-split data.
+     */
+    private fun migrateLegacyRooms(rooms: JsonObject, path: Path) {
+        val roomTarget = ApPaths.roomConfig.resolve(path.fileName)
+        val bossTarget = ApPaths.blockBossFileFor(path)
+
+        val roomPreset = RoomBlockPreset()
+        val bossPreset = RoomBlockPreset()
+        for ((room, donors) in rooms.entrySet()) {
+            val into = if (BOSS_KEY.matches(room)) bossPreset.forKey(room) else roomPreset.forKey(room)
+            readDonors(donors.asJsonObject, into, path)
+        }
+
+        if (!roomPreset.isEmpty() && roomTarget.notExists()) writeRoomBlocks(roomTarget, roomPreset)
+        if (!bossPreset.isEmpty() && bossTarget.notExists()) writeBossBlocks(bossTarget, bossPreset)
+    }
+
+    private fun readRoot(path: Path): JsonObject? {
+        if (path.notExists()) return null
+        return runCatching { JsonParser.parseString(path.readText()).asJsonObject }
+            .onFailure { LOGGER.error("Could not parse {}", path, it) }
+            .getOrNull()
     }
 
     private fun readDimensions(source: JsonObject, preset: BlockPreset, path: Path) {
@@ -91,23 +117,46 @@ object PresetCodec {
         val dimensions = preset.dimensions.entries
             .filter { it.value.isNotEmpty() }
             .associate { (dimension, positions) -> dimension.identifier().toString() to positions }
-        val rooms = preset.rooms.entries
-            .filter { it.value.isNotEmpty() }
-            .associate { (room, positions) -> room to positions }
 
         val text = buildString {
             append("{\n")
             append("  \"").append(DIMENSIONS).append("\": ")
             appendSection(dimensions, 1)
-            append(",\n")
-            append("  \"").append(ROOMS).append("\": ")
-            appendSection(rooms, 1)
             append('\n')
             append("}\n")
         }
 
         path.createParentDirectories()
         path.writeText(text)
+    }
+
+    // ---------------------------------------------------------------- dungeon rooms / bosses
+
+    /** `{ "Water Board": { "minecraft:...": ["3,70,-5"] } }` — dungeon-room paint, flat at the root. */
+    fun readRoomBlocks(path: Path): RoomBlockPreset = readKeyedBlocks(path)
+
+    fun writeRoomBlocks(path: Path, preset: RoomBlockPreset) = writeKeyedBlocks(path, preset)
+
+    /** `{ "B7": { "minecraft:...": ["3,70,-5"] } }` — boss-room paint, flat at the root. */
+    fun readBossBlocks(path: Path): RoomBlockPreset = readKeyedBlocks(path)
+
+    fun writeBossBlocks(path: Path, preset: RoomBlockPreset) = writeKeyedBlocks(path, preset)
+
+    private fun readKeyedBlocks(path: Path): RoomBlockPreset {
+        val preset = RoomBlockPreset()
+        val root = readRoot(path) ?: return preset
+        for ((key, donors) in root.entrySet()) {
+            readDonors(donors.asJsonObject, preset.forKey(key), path)
+        }
+        return preset
+    }
+
+    private fun writeKeyedBlocks(path: Path, preset: RoomBlockPreset) {
+        val groups = preset.positions.entries
+            .filter { it.value.isNotEmpty() }
+            .associate { (key, positions) -> key to positions }
+        path.createParentDirectories()
+        path.writeText(buildString { appendSection(groups, 0) } + "\n")
     }
 
     /**

@@ -70,10 +70,23 @@ object PaintSession {
         val presetChanged = wanted != null && wanted != PresetStores.types.activeName
         if (presetChanged) PresetStores.types.load(wanted)
 
-        val wantedBlocks = next?.key?.let { ApSettings.roomBlockPresetFor(it) }
-            ?: worldKey?.let { ApSettings.blockPresetFor(it) }
-        val blockPresetChanged = wantedBlocks != null && wantedBlocks != PresetStores.blocks.activeName
-        if (blockPresetChanged) PresetStores.blocks.load(wantedBlocks)
+        // Rooms and bosses are independent preset kinds, each with its own global default plus a
+        // per-key override - unlike blocks/types there is no per-world fallback to chain through.
+        val roomChanged = when {
+            next == null -> false
+            next.isBoss -> {
+                val wantedBoss = ApSettings.bossPresetFor(next.key)
+                (wantedBoss != PresetStores.bosses.activeName).also { changed ->
+                    if (changed) PresetStores.bosses.load(wantedBoss)
+                }
+            }
+            else -> {
+                val wantedRoom = ApSettings.roomPresetFor(next.key)
+                (wantedRoom != PresetStores.rooms.activeName).also { changed ->
+                    if (changed) PresetStores.rooms.load(wantedRoom)
+                }
+            }
+        }
 
         // Palettes only feed future applies, so swapping one never needs an index or chunk rebuild.
         val wantedPalette = next?.key?.let { ApSettings.roomPalettePresetFor(it) } ?: ApSettings.activePalette
@@ -83,13 +96,16 @@ object PaintSession {
 
         // Room borders are crossed constantly; rebuilding every loaded chunk each time would
         // stutter for nothing when neither room is painted and the rules did not change.
-        if (presetChanged || blockPresetChanged || hasRoomPaint(previous) || hasRoomPaint(next)) {
+        if (presetChanged || roomChanged || hasRoomPaint(previous) || hasRoomPaint(next)) {
             ChunkRebuild.markAll()
         }
     }
 
-    private fun hasRoomPaint(room: RoomScope?): Boolean =
-        room != null && PaintRules.blocks.positionsInRoom(room.key)?.isEmpty() == false
+    private fun hasRoomPaint(room: RoomScope?): Boolean {
+        if (room == null) return false
+        val store = if (room.isBoss) PresetStores.bosses else PresetStores.rooms
+        return store.active.positionsFor(room.key)?.isEmpty() == false
+    }
 
     // ---------------------------------------------------------------- debounced writes
 
@@ -104,6 +120,8 @@ object PaintSession {
         if (!dirty) return
         dirty = false
         PresetStores.blocks.saveActive()
+        PresetStores.rooms.saveActive()
+        PresetStores.bosses.saveActive()
         PresetStores.types.saveActive()
     }
 
@@ -114,17 +132,49 @@ object PaintSession {
 
     // ---------------------------------------------------------------- preset switching
 
-    /** Inside a room the choice binds to that room, so walking back in restores it. */
+    /** World-scoped, so it always binds to the current world regardless of room scope. */
     fun activateBlockPreset(name: String) {
         flush()
         PaintHistory.clear()
         PresetStores.blocks.load(name)
+        worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
 
-        val room = scope?.key
+    /**
+     * Room-scoped like a palette, not world-scoped like blocks/types: while standing in a normal
+     * dungeon room the choice binds to that room; otherwise it becomes the new global default.
+     */
+    fun activateRoomPreset(name: String) {
+        flush()
+        PaintHistory.clear()
+        PresetStores.rooms.load(name)
+
+        val room = scope?.takeUnless { it.isBoss }?.key
         if (room != null) {
-            ApSettings.bindRoomBlocks(room, PresetStores.blocks.activeName)
+            ApSettings.bindRoomPreset(room, PresetStores.rooms.activeName)
         } else {
-            worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
+            ApSettings.defaultRoomPreset = PresetStores.rooms.activeName
+            ApSettings.save()
+        }
+
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
+
+    /** Same shape as [activateRoomPreset], gated on actually standing in a boss room. */
+    fun activateBossPreset(name: String) {
+        flush()
+        PaintHistory.clear()
+        PresetStores.bosses.load(name)
+
+        val room = scope?.takeIf { it.isBoss }?.key
+        if (room != null) {
+            ApSettings.bindBossPreset(room, PresetStores.bosses.activeName)
+        } else {
+            ApSettings.defaultBossPreset = PresetStores.bosses.activeName
+            ApSettings.save()
         }
 
         PaintIndexBuilder.refresh()
