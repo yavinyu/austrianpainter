@@ -21,7 +21,7 @@ object ApSettings {
     var defaultBlockPreset: String = DEFAULT_PRESET
     var defaultTypePreset: String = DEFAULT_PRESET
 
-    /** Palettes are authoring tools, not world state, so one active palette is shared by all worlds. */
+    /** Fallback palette used when the current room (if any) has no palette bound to it. */
     var activePalette: String = DEFAULT_PRESET
     var brushRadius: Int = 1
     var paintSound: Boolean = true
@@ -45,10 +45,30 @@ object ApSettings {
     /** Room scope key to block-type preset, swapped in while that room is the active scope. */
     private val roomTypePresets = LinkedHashMap<String, String>()
 
+    /** Room scope key to positional block preset, swapped in while that room is the active scope. */
+    private val roomBlockPresets = LinkedHashMap<String, String>()
+
+    /** Room scope key to palette preset, swapped in while that room is the active scope. */
+    private val roomPalettePresets = LinkedHashMap<String, String>()
+
     fun roomTypePresetFor(scopeKey: String): String? = roomTypePresets[scopeKey]
 
     fun bindRoomTypes(scopeKey: String, preset: String?) {
         if (preset == null) roomTypePresets.remove(scopeKey) else roomTypePresets[scopeKey] = preset
+        save()
+    }
+
+    fun roomBlockPresetFor(scopeKey: String): String? = roomBlockPresets[scopeKey]
+
+    fun bindRoomBlocks(scopeKey: String, preset: String?) {
+        if (preset == null) roomBlockPresets.remove(scopeKey) else roomBlockPresets[scopeKey] = preset
+        save()
+    }
+
+    fun roomPalettePresetFor(scopeKey: String): String? = roomPalettePresets[scopeKey]
+
+    fun bindRoomPalettes(scopeKey: String, preset: String?) {
+        if (preset == null) roomPalettePresets.remove(scopeKey) else roomPalettePresets[scopeKey] = preset
         save()
     }
 
@@ -76,6 +96,9 @@ object ApSettings {
         when (kind) {
             PresetKind.BLOCKS -> {
                 for (bound in worldPresets.values) if (bound.blocks == from) bound.blocks = to
+                for (room in roomBlockPresets.keys.toList()) {
+                    if (roomBlockPresets[room] == from) roomBlockPresets[room] = to
+                }
                 if (defaultBlockPreset == from) defaultBlockPreset = to
             }
 
@@ -87,7 +110,12 @@ object ApSettings {
                 if (defaultTypePreset == from) defaultTypePreset = to
             }
 
-            PresetKind.PALETTES -> if (activePalette == from) activePalette = to
+            PresetKind.PALETTES -> {
+                for (room in roomPalettePresets.keys.toList()) {
+                    if (roomPalettePresets[room] == from) roomPalettePresets[room] = to
+                }
+                if (activePalette == from) activePalette = to
+            }
         }
         save()
     }
@@ -124,6 +152,16 @@ object ApSettings {
                 roomTypePresets[room] = preset.asString
             }
 
+            roomBlockPresets.clear()
+            root.getAsJsonObject("roomBlockPresets")?.entrySet()?.forEach { (room, preset) ->
+                roomBlockPresets[room] = preset.asString
+            }
+
+            roomPalettePresets.clear()
+            root.getAsJsonObject("roomPalettePresets")?.entrySet()?.forEach { (room, preset) ->
+                roomPalettePresets[room] = preset.asString
+            }
+
             worldPresets.clear()
             root.getAsJsonObject("worldPresets")?.entrySet()?.forEach { (world, value) ->
                 val bound = value.asJsonObject
@@ -152,6 +190,14 @@ object ApSettings {
             val roomBindings = JsonObject()
             for ((room, preset) in roomTypePresets) roomBindings.addProperty(room, preset)
             add("roomTypePresets", roomBindings)
+
+            val roomBlockBindings = JsonObject()
+            for ((room, preset) in roomBlockPresets) roomBlockBindings.addProperty(room, preset)
+            add("roomBlockPresets", roomBlockBindings)
+
+            val roomPaletteBindings = JsonObject()
+            for ((room, preset) in roomPalettePresets) roomPaletteBindings.addProperty(room, preset)
+            add("roomPalettePresets", roomPaletteBindings)
 
             val bindings = JsonObject()
             for ((world, bound) in worldPresets) {

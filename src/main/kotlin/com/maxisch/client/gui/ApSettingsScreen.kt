@@ -192,6 +192,32 @@ object ApSettingsScreen {
                                     }
                                     .build(),
                             )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.unbind_room_blocks"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.unbind_room_blocks.desc"),
+                                        ),
+                                    )
+                                    .action { _, _ ->
+                                        PaintStorage.scope?.key?.let { ApSettings.bindRoomBlocks(it, null) }
+                                    }
+                                    .build(),
+                            )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.unbind_room_palettes"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.unbind_room_palettes.desc"),
+                                        ),
+                                    )
+                                    .action { _, _ ->
+                                        PaintStorage.scope?.key?.let { ApSettings.bindRoomPalettes(it, null) }
+                                    }
+                                    .build(),
+                            )
                             .build(),
                     )
                     .build(),

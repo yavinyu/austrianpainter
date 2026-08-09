@@ -70,11 +70,22 @@ object PaintSession {
         val presetChanged = wanted != null && wanted != PresetStores.types.activeName
         if (presetChanged) PresetStores.types.load(wanted)
 
+        val wantedBlocks = next?.key?.let { ApSettings.roomBlockPresetFor(it) }
+            ?: worldKey?.let { ApSettings.blockPresetFor(it) }
+        val blockPresetChanged = wantedBlocks != null && wantedBlocks != PresetStores.blocks.activeName
+        if (blockPresetChanged) PresetStores.blocks.load(wantedBlocks)
+
+        // Palettes only feed future applies, so swapping one never needs an index or chunk rebuild.
+        val wantedPalette = next?.key?.let { ApSettings.roomPalettePresetFor(it) } ?: ApSettings.activePalette
+        if (wantedPalette != PresetStores.palettes.activeName) PresetStores.palettes.load(wantedPalette)
+
         PaintIndexBuilder.refresh()
 
         // Room borders are crossed constantly; rebuilding every loaded chunk each time would
         // stutter for nothing when neither room is painted and the rules did not change.
-        if (presetChanged || hasRoomPaint(previous) || hasRoomPaint(next)) ChunkRebuild.markAll()
+        if (presetChanged || blockPresetChanged || hasRoomPaint(previous) || hasRoomPaint(next)) {
+            ChunkRebuild.markAll()
+        }
     }
 
     private fun hasRoomPaint(room: RoomScope?): Boolean =
@@ -103,11 +114,19 @@ object PaintSession {
 
     // ---------------------------------------------------------------- preset switching
 
+    /** Inside a room the choice binds to that room, so walking back in restores it. */
     fun activateBlockPreset(name: String) {
         flush()
         PaintHistory.clear()
         PresetStores.blocks.load(name)
-        worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
+
+        val room = scope?.key
+        if (room != null) {
+            ApSettings.bindRoomBlocks(room, PresetStores.blocks.activeName)
+        } else {
+            worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
+        }
+
         PaintIndexBuilder.refresh()
         ChunkRebuild.markAll()
     }
@@ -131,12 +150,18 @@ object PaintSession {
 
     /**
      * Palettes only feed future applies, so nothing already painted changes - no index rebuild and
-     * no chunk rebuild here.
+     * no chunk rebuild here. Inside a room the choice binds to that room, like block/type presets.
      */
     fun activatePalette(name: String) {
         PresetStores.palettes.load(name)
-        ApSettings.activePalette = PresetStores.palettes.activeName
-        ApSettings.save()
+
+        val room = scope?.key
+        if (room != null) {
+            ApSettings.bindRoomPalettes(room, PresetStores.palettes.activeName)
+        } else {
+            ApSettings.activePalette = PresetStores.palettes.activeName
+            ApSettings.save()
+        }
     }
 
     // ---------------------------------------------------------------- world identity
