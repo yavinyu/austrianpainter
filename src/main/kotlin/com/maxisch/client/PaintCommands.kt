@@ -77,7 +77,13 @@ object PaintCommands {
                         ),
                     )
                     .then(
-                        ClientCommands.literal("room").executes { context -> roomStatus(context.source) },
+                        ClientCommands.literal("room")
+                            .executes { context -> roomStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("raw").executes { context ->
+                                    dumpRawSidebar(context.source)
+                                },
+                            ),
                     )
                     .then(
                         ClientCommands.literal("undo").executes { context ->
@@ -172,6 +178,14 @@ object PaintCommands {
             if (boss) "austrianpainter.room.force_boss" else "austrianpainter.room.force_floor",
             floor,
         )
+    }
+
+    /** Dumps exactly what the client's scoreboard model holds, to diagnose a detection failure. */
+    private fun dumpRawSidebar(source: FabricClientCommandSource): Int {
+        for (line in DungeonLocation.debugSidebar()) {
+            source.sendFeedback(Component.literal(line))
+        }
+        return 1
     }
 
     /** Diagnostics for the dungeon scope: without this the detection is invisible until it fails. */
