@@ -9,8 +9,9 @@ import net.minecraft.world.scores.DisplaySlot
  * whether they are standing in that floor's boss room.
  *
  * Everything is read off the client's own scoreboard once a tick instead of intercepting packets,
- * so this needs no mixins. Hypixel puts the sidebar text in the team prefix/suffix of each score
- * holder, which is why the lines are assembled from teams rather than read directly.
+ * so this needs no mixins. Hypixel still puts the sidebar text in each team's prefix/suffix, but a
+ * score entry's owner name does not reliably correlate back to its team, so every team on the
+ * scoreboard is scanned directly for its text instead of looking teams up per sidebar entry.
  */
 object DungeonLocation {
 
@@ -76,11 +77,12 @@ object DungeonLocation {
         inSkyblock = sidebar.name == SIDEBAR_OBJECTIVE
         if (!inSkyblock) return reset()
 
+        // The floor line's score entry does not reliably correlate back to its team by owner name,
+        // so every team is scanned directly for its text instead - same approach NoammAddons uses.
         // The floor only ever appears once, and only while actually inside the dungeon - the queue
         // line mentions The Catacombs too, hence the explicit exclusion.
         var found: String? = null
-        for (entry in scoreboard.listPlayerScores(sidebar)) {
-            val team = scoreboard.getPlayerTeam(entry.owner()) ?: continue
+        for (team in scoreboard.playerTeams) {
             val text = clean(team.playerPrefix.string + team.playerSuffix.string)
             if (!text.contains("The Catacombs (") || text.contains("Queue")) continue
             found = text.substringAfter("(").substringBefore(")")
@@ -101,6 +103,23 @@ object DungeonLocation {
 
         val number = floorNumber ?: 0
         inBoss = number in 1..7 && BOSS_BOUNDS[number - 1].contains(player.position())
+    }
+
+    /**
+     * Raw scoreboard read for `/paintbrush room raw`, so a detection failure can be diagnosed from
+     * chat instead of needing a log file: shows the objective Hypixel is actually sending and every
+     * team's cleaned prefix+suffix text, independent of whether it matches "The Catacombs (".
+     */
+    fun debugSidebar(): List<String> {
+        val scoreboard = Minecraft.getInstance().level?.scoreboard ?: return listOf("no level loaded")
+        val sidebar = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)
+            ?: return listOf("no sidebar objective displayed")
+
+        val lines = mutableListOf("objective name: ${sidebar.name}")
+        for (team in scoreboard.playerTeams) {
+            lines += "\"" + clean(team.playerPrefix.string + team.playerSuffix.string) + "\""
+        }
+        return lines
     }
 
     fun reset() {
