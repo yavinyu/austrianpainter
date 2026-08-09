@@ -8,4 +8,4 @@ import net.minecraft.core.BlockPos
  * A scope is only handed out once the room is oriented, so paint can never bind to a room that is
  * still half scanned and end up stored against the wrong corner.
  */
-data class RoomScope(val key: String, val origin: BlockPos, val rotation: Int)
+data class RoomScope(val key: String, val origin: BlockPos, val rotation: Int, val isBoss: Boolean)

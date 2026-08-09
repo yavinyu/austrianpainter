@@ -17,7 +17,10 @@ internal object PaintIndexBuilder {
         val dimension = PaintSession.currentDimension()
         val absolute = dimension?.let { PaintRules.blocks.positionsIn(it) }
         val scope = PaintSession.scope
-        val room = scope?.let { PaintRules.blocks.positionsInRoom(it.key) }?.takeUnless { it.isEmpty() }
+        val room = scope?.let {
+            val store = if (it.isBoss) PresetStores.bosses else PresetStores.rooms
+            store.active.positionsFor(it.key)
+        }?.takeUnless { it.isEmpty() }
 
         if (scope == null || room == null) {
             PaintIndex.rebuild(absolute, PaintRules.types.map)

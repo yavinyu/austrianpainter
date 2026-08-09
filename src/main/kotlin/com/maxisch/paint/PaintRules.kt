@@ -67,7 +67,8 @@ object PaintRules {
     private fun activeSlice(create: Boolean): Slice? {
         val room = PaintSession.scope
         if (room != null) {
-            val map = if (create) blocks.forRoom(room.key) else blocks.positionsInRoom(room.key)
+            val store = if (room.isBoss) PresetStores.bosses else PresetStores.rooms
+            val map = if (create) store.active.forKey(room.key) else store.active.positionsFor(room.key)
             return Slice(map ?: return null) { RoomTransform.toRelative(it, room.origin, room.rotation) }
         }
 

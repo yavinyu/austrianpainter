@@ -16,9 +16,9 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.network.chat.Component
 
 /**
- * Manages all three preset folders.
+ * Manages all five preset folders.
  *
- * One tab rather than three, because the widget set is identical for every kind - only the store it
+ * One tab rather than five, because the widget set is identical for every kind - only the store it
  * edits and how a switch is applied differ, and those swap without rebuilding anything.
  *
  * Every refused action says why. `create`/`rename`/`duplicate` return null for "blank or taken",
@@ -44,6 +44,8 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private val activate: (String) -> Unit
         get() = when (kind) {
             PresetKind.BLOCKS -> PaintStorage::activateBlockPreset
+            PresetKind.ROOMS -> PaintStorage::activateRoomPreset
+            PresetKind.BOSSES -> PaintStorage::activateBossPreset
             PresetKind.TYPES -> PaintStorage::activateTypePreset
             PresetKind.PALETTES -> PaintStorage::activatePalette
         }
@@ -238,6 +240,8 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private fun kindLabel(): Component = Component.translatable(
         when (kind) {
             PresetKind.BLOCKS -> "austrianpainter.presets.blocks"
+            PresetKind.ROOMS -> "austrianpainter.presets.rooms"
+            PresetKind.BOSSES -> "austrianpainter.presets.bosses"
             PresetKind.TYPES -> "austrianpainter.presets.types"
             PresetKind.PALETTES -> "austrianpainter.presets.palettes"
         },
