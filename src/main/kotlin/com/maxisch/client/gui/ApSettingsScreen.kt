@@ -356,6 +356,19 @@ object ApSettingsScreen {
                                     }
                                     .build(),
                             )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.zones"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.zones.desc"),
+                                        ),
+                                    )
+                                    .action { screen, _ ->
+                                        Minecraft.getInstance().setScreenAndShow(BossZoneRulesScreen(screen))
+                                    }
+                                    .build(),
+                            )
                             .build(),
                     )
                     .build(),

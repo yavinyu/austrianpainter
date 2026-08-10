@@ -4,6 +4,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.maxisch.paint.ApLog.LOGGER
+import net.minecraft.core.registries.BuiltInRegistries
 import kotlin.io.path.notExists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -131,6 +132,40 @@ object ApSettings {
         save()
     }
 
+    // ---------------------------------------------------------------- boss zones
+
+    var zonesEnabled: Boolean = false
+
+    /** Keyed "<zone>.<blockId>[.lit|.unlit]", same present-with-null-means-off contract as
+     *  [deviceRules]. */
+    private val zoneRules = LinkedHashMap<String, AreaTarget?>()
+
+    private fun zoneRuleKey(rule: ZoneSourceRule): String {
+        val blockId = BuiltInRegistries.BLOCK.getKey(rule.block)
+        val suffix = when (rule.lit) {
+            true -> ".lit"
+            false -> ".unlit"
+            null -> ""
+        }
+        return "${rule.zone.key}.$blockId$suffix"
+    }
+
+    fun zoneRule(rule: ZoneSourceRule): AreaTarget? {
+        val key = zoneRuleKey(rule)
+        if (zoneRules.containsKey(key)) return zoneRules[key]
+        return rule.default
+    }
+
+    fun setZoneRule(rule: ZoneSourceRule, target: AreaTarget?) {
+        zoneRules[zoneRuleKey(rule)] = target
+        save()
+    }
+
+    fun resetZoneRules() {
+        zoneRules.clear()
+        save()
+    }
+
     private val worldPresets = LinkedHashMap<String, WorldBinding>()
 
     /** Room scope key to block-type preset, swapped in while that room is the active scope. */
@@ -239,6 +274,16 @@ object ApSettings {
                     }
                 }
                 if (renamed) DeviceColumns.invalidate()
+
+                var zoneRenamed = false
+                for (key in zoneRules.keys.toList()) {
+                    val target = zoneRules[key]
+                    if (target is AreaTarget.Palette && target.name == from) {
+                        zoneRules[key] = AreaTarget.Palette(to)
+                        zoneRenamed = true
+                    }
+                }
+                if (zoneRenamed) BossZones.invalidate()
             }
 
             PresetKind.RULESETS -> {
@@ -322,6 +367,17 @@ object ApSettings {
                 }
             }
 
+            zoneRules.clear()
+            root.getAsJsonObject("bossZones")?.let { zones ->
+                zonesEnabled = zones.get("enabled")?.asBoolean ?: false
+                zones.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
+                    val raw = value.asString
+                    zoneRules[key] =
+                        if (raw == DEVICE_RULE_OFF) null
+                        else PresetCodec.target(raw, path) ?: return@forEach
+                }
+            }
+
             recentDonors.clear()
             root.getAsJsonArray("recentDonors")?.forEach { id ->
                 if (recentDonors.size < MAX_RECENT_DONORS) recentDonors.add(id.asString)
@@ -393,6 +449,22 @@ object ApSettings {
                                 if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
                             )
                         }
+                    }
+                    add("rules", rules)
+                },
+            )
+
+            add(
+                "bossZones",
+                JsonObject().apply {
+                    addProperty("enabled", zonesEnabled)
+                    val rules = JsonObject()
+                    for (rule in BossZones.RULES) {
+                        val target = zoneRule(rule)
+                        rules.addProperty(
+                            zoneRuleKey(rule),
+                            if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
+                        )
                     }
                     add("rules", rules)
                 },
