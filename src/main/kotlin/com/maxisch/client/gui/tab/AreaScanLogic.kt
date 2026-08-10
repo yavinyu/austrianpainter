@@ -3,6 +3,9 @@ package com.maxisch.client.gui.tab
 import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.render.BlockHighlight
+import com.maxisch.client.render.PaintedOverlay
+import com.maxisch.paint.ApSettings
 import com.maxisch.paint.AreaSelector
 import com.maxisch.paint.AreaTarget
 import com.maxisch.paint.PaintFilter
@@ -11,6 +14,7 @@ import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PalettePreset
 import com.maxisch.paint.PresetStores
 import com.maxisch.paint.RulesetPreset
+import com.maxisch.paint.displayName
 import com.maxisch.paint.session.AreaScan
 import com.maxisch.paint.session.PaintArea
 import net.minecraft.client.Minecraft
@@ -87,6 +91,28 @@ class AreaScanLogic(private val screen: PainterScreen) {
 
     // ------------------------------------------------------------------ applying
 
+    /**
+     * Outlines what [replace] would touch, without touching it. Runs exactly the same grouping call,
+     * so what is shown cannot drift from what would be painted.
+     */
+    fun preview() {
+        val level = Minecraft.getInstance().level ?: return
+        if (!PaintArea.complete || tooBig() || PaintArea.rules.isEmpty()) return
+
+        val positions = AreaScan.positionsFor(level, PaintArea.rules.keys).values.flatten()
+        BlockHighlight.showPreview(positions, ApSettings.areaPreviewColor)
+
+        screen.status(
+            if (positions.size > BlockHighlight.MAX_BOXES) {
+                Component.translatable("austrianpainter.area.preview_capped", positions.size, BlockHighlight.MAX_BOXES)
+            } else {
+                Component.translatable("austrianpainter.area.previewed", positions.size)
+            },
+        )
+    }
+
+    fun clearPreview() = BlockHighlight.clearPreview()
+
     /** Every rule at once, as a single undoable change. */
     fun replace() {
         val level = Minecraft.getInstance().level ?: return
@@ -120,6 +146,10 @@ class AreaScanLogic(private val screen: PainterScreen) {
             screen.status(Component.translatable("austrianpainter.area.matched_nothing"))
             return
         }
+
+        // The preview described the world before this apply; it is a lie the moment it lands.
+        BlockHighlight.clearPreview()
+        PaintedOverlay.invalidate()
 
         PaintArea.lastPaletteApplied = rerollable
         PaintArea.lastRules = LinkedHashMap(PaintArea.rules)
@@ -247,23 +277,9 @@ class AreaScanLogic(private val screen: PainterScreen) {
         PresetStores.palettes.activeName,
     )
 
-    fun selectorName(selector: AreaSelector): Component = when (selector) {
-        AreaSelector.Everything -> Component.translatable("austrianpainter.area.everything")
-        AreaSelector.Unpainted -> Component.translatable("austrianpainter.area.unpainted")
-        is AreaSelector.Type -> when (val paint = selector.paint) {
-            PaintFilter.Unpainted -> selector.block.name
-            PaintFilter.AnyPaint ->
-                Component.translatable("austrianpainter.area.any_paint", selector.block.name)
+    fun selectorName(selector: AreaSelector): Component = selector.displayName()
 
-            is PaintFilter.PaintedAs ->
-                Component.translatable("austrianpainter.area.painted_as", selector.block.name, paint.donor.name)
-        }
-    }
-
-    fun targetName(target: AreaTarget): Component = when (target) {
-        is AreaTarget.Donor -> target.block.name
-        is AreaTarget.Palette -> Component.translatable("austrianpainter.area.palette_target", target.name)
-    }
+    fun targetName(target: AreaTarget): Component = target.displayName()
 
     fun emptyText(): Component = when {
         !PaintArea.complete -> KeyHints.cornerHint()

@@ -1,5 +1,6 @@
 package com.maxisch.paint
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.maxisch.paint.ApLog.LOGGER
@@ -20,6 +21,13 @@ object ApSettings {
     const val DEFAULT_AREA_OUTLINE = 0xFFFFAA00.toInt()
     const val DEFAULT_AREA_FILL = 0x30FFAA00
 
+    /** Green for what is already painted, cyan for what an apply is about to paint. */
+    const val DEFAULT_PAINTED_OUTLINE = 0xFF55FF55.toInt()
+    const val DEFAULT_PREVIEW_OUTLINE = 0xFF55FFFF.toInt()
+
+    const val MIN_OVERLAY_RADIUS = 4
+    const val MAX_OVERLAY_RADIUS = 48
+
     var defaultBlockPreset: String = DEFAULT_PRESET
     var defaultTypePreset: String = DEFAULT_PRESET
 
@@ -34,6 +42,26 @@ object ApSettings {
 
     /** The area ruleset in hand. Global: a ruleset describes a look, not a place. */
     var activeRuleset: String = DEFAULT_PRESET
+
+    /** How many donors the block picker offers back, newest first. One row of its grid. */
+    const val MAX_RECENT_DONORS = 9
+
+    /**
+     * Block ids of the donors picked most recently, newest first. Kept as ids rather than blocks so
+     * a resource pack or mod change cannot fail the settings load; the picker resolves them and
+     * silently drops whatever no longer exists.
+     */
+    private val recentDonors = mutableListOf<String>()
+
+    fun recentDonorIds(): List<String> = recentDonors
+
+    /** Moves [id] to the front, deduped and trimmed. Saves: the list is only touched on a pick. */
+    fun rememberDonor(id: String) {
+        recentDonors.remove(id)
+        recentDonors.add(0, id)
+        while (recentDonors.size > MAX_RECENT_DONORS) recentDonors.removeLast()
+        save()
+    }
 
     var brushRadius: Int = 1
     var paintSound: Boolean = true
@@ -51,6 +79,14 @@ object ApSettings {
     /** ARGB. The fill is deliberately faint so the box never hides what is inside it. */
     var areaOutlineColor: Int = DEFAULT_AREA_OUTLINE
     var areaFillColor: Int = DEFAULT_AREA_FILL
+
+    /** Outlines painted blocks around the player, since paint is otherwise invisible as paint. */
+    var showPaintedOverlay: Boolean = false
+    var paintedOverlayRadius: Int = 16
+    var paintedOverlayColor: Int = DEFAULT_PAINTED_OUTLINE
+
+    /** Colour of the "this is what Replace would touch" outline in the area tab. */
+    var areaPreviewColor: Int = DEFAULT_PREVIEW_OUTLINE
 
     private val worldPresets = LinkedHashMap<String, WorldBinding>()
 
@@ -186,6 +222,11 @@ object ApSettings {
             dungeonRoomScope = root.get("dungeonRoomScope")?.asBoolean ?: true
             areaOutlineColor = root.get("areaOutlineColor")?.asInt ?: DEFAULT_AREA_OUTLINE
             areaFillColor = root.get("areaFillColor")?.asInt ?: DEFAULT_AREA_FILL
+            showPaintedOverlay = root.get("showPaintedOverlay")?.asBoolean ?: false
+            paintedOverlayRadius = (root.get("paintedOverlayRadius")?.asInt ?: 16)
+                .coerceIn(MIN_OVERLAY_RADIUS, MAX_OVERLAY_RADIUS)
+            paintedOverlayColor = root.get("paintedOverlayColor")?.asInt ?: DEFAULT_PAINTED_OUTLINE
+            areaPreviewColor = root.get("areaPreviewColor")?.asInt ?: DEFAULT_PREVIEW_OUTLINE
 
             roomTypePresets.clear()
             root.getAsJsonObject("roomTypePresets")?.entrySet()?.forEach { (room, preset) ->
@@ -210,6 +251,11 @@ object ApSettings {
             roomPalettePresets.clear()
             root.getAsJsonObject("roomPalettePresets")?.entrySet()?.forEach { (room, preset) ->
                 roomPalettePresets[room] = preset.asString
+            }
+
+            recentDonors.clear()
+            root.getAsJsonArray("recentDonors")?.forEach { id ->
+                if (recentDonors.size < MAX_RECENT_DONORS) recentDonors.add(id.asString)
             }
 
             worldPresets.clear()
@@ -239,6 +285,10 @@ object ApSettings {
             addProperty("dungeonRoomScope", dungeonRoomScope)
             addProperty("areaOutlineColor", areaOutlineColor)
             addProperty("areaFillColor", areaFillColor)
+            addProperty("showPaintedOverlay", showPaintedOverlay)
+            addProperty("paintedOverlayRadius", paintedOverlayRadius)
+            addProperty("paintedOverlayColor", paintedOverlayColor)
+            addProperty("areaPreviewColor", areaPreviewColor)
 
             val roomBindings = JsonObject()
             for ((room, preset) in roomTypePresets) roomBindings.addProperty(room, preset)
@@ -255,6 +305,10 @@ object ApSettings {
             val roomPaletteBindings = JsonObject()
             for ((room, preset) in roomPalettePresets) roomPaletteBindings.addProperty(room, preset)
             add("roomPalettePresets", roomPaletteBindings)
+
+            val recent = JsonArray()
+            for (id in recentDonors) recent.add(id)
+            add("recentDonors", recent)
 
             val bindings = JsonObject()
             for ((world, bound) in worldPresets) {

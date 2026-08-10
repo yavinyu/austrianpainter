@@ -1,6 +1,8 @@
 package com.maxisch.client
 
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.render.PaintedOverlay
+import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.session.PaintArea
 import com.maxisch.paint.session.PaintBrush
@@ -30,6 +32,8 @@ object PaintKeys {
     private lateinit var cornerSecond: KeyMapping
     private lateinit var clearArea: KeyMapping
     private lateinit var undo: KeyMapping
+    private lateinit var redo: KeyMapping
+    private lateinit var toggleOverlay: KeyMapping
 
     fun register() {
         openMenu = bind("key.austrianpainter.open", GLFW.GLFW_KEY_P)
@@ -42,6 +46,9 @@ object PaintKeys {
         clearArea = bind("key.austrianpainter.clear_area", GLFW.GLFW_KEY_BACKSLASH)
         // Z is unbound in vanilla, and it is where undo lives everywhere else.
         undo = bind("key.austrianpainter.undo", GLFW.GLFW_KEY_Z)
+        // Next to undo, the way Y sits next to Z on a QWERTZ board - and unbound in vanilla too.
+        redo = bind("key.austrianpainter.redo", GLFW.GLFW_KEY_Y)
+        toggleOverlay = bind("key.austrianpainter.toggle_overlay", GLFW.GLFW_KEY_J)
 
         ClientTickEvents.END_CLIENT_TICK.register { client -> tick(client) }
     }
@@ -55,8 +62,14 @@ object PaintKeys {
 
     val openMenuKey: KeyMapping? get() = if (::openMenu.isInitialized) openMenu else null
     val brushPaintKey: KeyMapping? get() = if (::brushPaint.isInitialized) brushPaint else null
+    val brushEraseKey: KeyMapping? get() = if (::brushErase.isInitialized) brushErase else null
+    val openAreaKey: KeyMapping? get() = if (::openArea.isInitialized) openArea else null
     val cornerFirstKey: KeyMapping? get() = if (::cornerFirst.isInitialized) cornerFirst else null
     val cornerSecondKey: KeyMapping? get() = if (::cornerSecond.isInitialized) cornerSecond else null
+    val clearAreaKey: KeyMapping? get() = if (::clearArea.isInitialized) clearArea else null
+    val undoKey: KeyMapping? get() = if (::undo.isInitialized) undo else null
+    val redoKey: KeyMapping? get() = if (::redo.isInitialized) redo else null
+    val toggleOverlayKey: KeyMapping? get() = if (::toggleOverlay.isInitialized) toggleOverlay else null
 
     private fun bind(translationKey: String, key: Int): KeyMapping =
         KeyMappingHelper.registerKeyMapping(
@@ -69,8 +82,12 @@ object PaintKeys {
         while (cornerFirst.consumeClick()) markCorner(client, first = true)
         while (cornerSecond.consumeClick()) markCorner(client, first = false)
         while (clearArea.consumeClick()) clearSelection(client)
+        while (toggleOverlay.consumeClick()) flipOverlay(client)
         while (undo.consumeClick()) {
             if (client.level != null) tell(client, PaintStorage.undo())
+        }
+        while (redo.consumeClick()) {
+            if (client.level != null) tell(client, PaintStorage.redo())
         }
         while (openMenu.consumeClick()) {
             if (client.level != null) client.setScreenAndShow(PainterScreen.open())
@@ -81,6 +98,24 @@ object PaintKeys {
                 client.setScreenAndShow(PainterScreen.openAt(PainterScreen.TabId.AREA))
             }
         }
+    }
+
+    private fun flipOverlay(client: Minecraft) {
+        if (client.level == null) return
+
+        ApSettings.showPaintedOverlay = !ApSettings.showPaintedOverlay
+        ApSettings.save()
+        PaintedOverlay.invalidate()
+        tell(
+            client,
+            Component.translatable(
+                if (ApSettings.showPaintedOverlay) {
+                    "austrianpainter.overlay.on"
+                } else {
+                    "austrianpainter.overlay.off"
+                },
+            ),
+        )
     }
 
     /** Silent when there is nothing selected, so a stray press does not spam the chat. */

@@ -23,6 +23,11 @@ import kotlin.io.path.writeText
  * Every file is meant to be opened and edited by hand, so parsing is deliberately forgiving: a bad
  * coordinate, an unknown block or a junk key is logged and skipped rather than failing the load. The
  * alternative - refusing to load - would lose someone's whole palette over one typo.
+ *
+ * Each format has a `parse`/`render` pair over plain text and a thin `read`/`write` pair over a
+ * [Path]. Text is the real interface: it is what a preset shared through the clipboard is. The
+ * `source` threaded through the parsers is only ever a log label - a file path, or the word
+ * "clipboard".
  */
 object PresetCodec {
 
@@ -39,26 +44,28 @@ object PresetCodec {
      * ```
      *
      * Files written before rooms existed are a bare dimension map with no wrapper, so a root
-     * without a `dimensions` section is read as one. A leftover `rooms` section is from before
-     * dungeon-room and boss-room paint got their own preset kinds - see [migrateLegacyRooms].
+     * without a `dimensions` section is read as one.
      */
-    fun readBlocks(path: Path): BlockPreset {
+    fun parseBlocks(text: String, source: Any): BlockPreset {
         val preset = BlockPreset()
-        if (path.notExists()) return preset
-
-        val root = runCatching { JsonParser.parseString(path.readText()).asJsonObject }
-            .onFailure { LOGGER.error("Could not parse {}", path, it) }
-            .getOrNull() ?: return preset
+        val root = parseRoot(text, source) ?: return preset
 
         val dimensions = root.getAsJsonObject(DIMENSIONS)
-        val rooms = root.getAsJsonObject(ROOMS)
-
-        if (dimensions == null && rooms == null) {
-            readDimensions(root, preset, path)
+        if (dimensions == null && root.getAsJsonObject(ROOMS) == null) {
+            readDimensions(root, preset, source)
         } else {
-            dimensions?.let { readDimensions(it, preset, path) }
-            rooms?.let { migrateLegacyRooms(it, path) }
+            dimensions?.let { readDimensions(it, preset, source) }
         }
+        return preset
+    }
+
+    /** A leftover `rooms` section only a real file can carry; see [migrateLegacyRooms]. */
+    fun readBlocks(path: Path): BlockPreset {
+        if (path.notExists()) return BlockPreset()
+
+        val text = path.readText()
+        val preset = parseBlocks(text, path)
+        parseRoot(text, path)?.getAsJsonObject(ROOMS)?.let { migrateLegacyRooms(it, path) }
         return preset
     }
 
@@ -84,79 +91,83 @@ object PresetCodec {
         if (!bossPreset.isEmpty() && bossTarget.notExists()) writeBossBlocks(bossTarget, bossPreset)
     }
 
+    private fun parseRoot(text: String, source: Any): JsonObject? =
+        runCatching { JsonParser.parseString(text).asJsonObject }
+            .onFailure { LOGGER.error("Could not parse {}", source, it) }
+            .getOrNull()
+
     private fun readRoot(path: Path): JsonObject? {
         if (path.notExists()) return null
-        return runCatching { JsonParser.parseString(path.readText()).asJsonObject }
-            .onFailure { LOGGER.error("Could not parse {}", path, it) }
-            .getOrNull()
+        return parseRoot(path.readText(), path)
     }
 
-    private fun readDimensions(source: JsonObject, preset: BlockPreset, path: Path) {
-        for ((dimensionId, donors) in source.entrySet()) {
+    private fun readDimensions(root: JsonObject, preset: BlockPreset, source: Any) {
+        for ((dimensionId, donors) in root.entrySet()) {
             val dimension = Identifier.tryParse(dimensionId)
                 ?.let { ResourceKey.create(Registries.DIMENSION, it) }
             if (dimension == null) {
-                LOGGER.warn("Skipping unknown dimension key '{}' in {}", dimensionId, path)
+                LOGGER.warn("Skipping unknown dimension key '{}' in {}", dimensionId, source)
                 continue
             }
-            readDonors(donors.asJsonObject, preset.forDimension(dimension), path)
+            readDonors(donors.asJsonObject, preset.forDimension(dimension), source)
         }
     }
 
-    private fun readDonors(source: JsonObject, into: Long2ObjectMap<Block>, path: Path) {
-        for ((blockId, coordinates) in source.entrySet()) {
-            val block = block(blockId, path) ?: continue
+    private fun readDonors(root: JsonObject, into: Long2ObjectMap<Block>, source: Any) {
+        for ((blockId, coordinates) in root.entrySet()) {
+            val block = block(blockId, source) ?: continue
             for (element in coordinates.asJsonArray) {
-                val pos = parsePos(element.asString, path) ?: continue
+                val pos = parsePos(element.asString, source) ?: continue
                 into.put(pos.asLong(), block)
             }
         }
     }
 
-    fun writeBlocks(path: Path, preset: BlockPreset) {
+    fun renderBlocks(preset: BlockPreset): String {
         val dimensions = preset.dimensions.entries
             .filter { it.value.isNotEmpty() }
             .associate { (dimension, positions) -> dimension.identifier().toString() to positions }
 
-        val text = buildString {
+        return buildString {
             append("{\n")
             append("  \"").append(DIMENSIONS).append("\": ")
             appendSection(dimensions, 1)
             append('\n')
             append("}\n")
         }
-
-        path.createParentDirectories()
-        path.writeText(text)
     }
+
+    fun writeBlocks(path: Path, preset: BlockPreset) = write(path, renderBlocks(preset))
 
     // ---------------------------------------------------------------- dungeon rooms / bosses
 
     /** `{ "Water Board": { "minecraft:...": ["3,70,-5"] } }` — dungeon-room paint, flat at the root. */
-    fun readRoomBlocks(path: Path): RoomBlockPreset = readKeyedBlocks(path)
+    fun readRoomBlocks(path: Path): RoomBlockPreset = keyedFrom(readRoot(path), path)
 
-    fun writeRoomBlocks(path: Path, preset: RoomBlockPreset) = writeKeyedBlocks(path, preset)
+    fun writeRoomBlocks(path: Path, preset: RoomBlockPreset) = write(path, renderKeyedBlocks(preset))
 
     /** `{ "B7": { "minecraft:...": ["3,70,-5"] } }` — boss-room paint, flat at the root. */
-    fun readBossBlocks(path: Path): RoomBlockPreset = readKeyedBlocks(path)
+    fun readBossBlocks(path: Path): RoomBlockPreset = keyedFrom(readRoot(path), path)
 
-    fun writeBossBlocks(path: Path, preset: RoomBlockPreset) = writeKeyedBlocks(path, preset)
+    fun writeBossBlocks(path: Path, preset: RoomBlockPreset) = write(path, renderKeyedBlocks(preset))
 
-    private fun readKeyedBlocks(path: Path): RoomBlockPreset {
+    fun parseKeyedBlocks(text: String, source: Any): RoomBlockPreset =
+        keyedFrom(parseRoot(text, source), source)
+
+    private fun keyedFrom(root: JsonObject?, source: Any): RoomBlockPreset {
         val preset = RoomBlockPreset()
-        val root = readRoot(path) ?: return preset
+        if (root == null) return preset
         for ((key, donors) in root.entrySet()) {
-            readDonors(donors.asJsonObject, preset.forKey(key), path)
+            readDonors(donors.asJsonObject, preset.forKey(key), source)
         }
         return preset
     }
 
-    private fun writeKeyedBlocks(path: Path, preset: RoomBlockPreset) {
+    fun renderKeyedBlocks(preset: RoomBlockPreset): String {
         val groups = preset.positions.entries
             .filter { it.value.isNotEmpty() }
             .associate { (key, positions) -> key to positions }
-        path.createParentDirectories()
-        path.writeText(buildString { appendSection(groups, 0) } + "\n")
+        return buildString { appendSection(groups, 0) } + "\n"
     }
 
     /**
@@ -213,49 +224,45 @@ object PresetCodec {
     // ---------------------------------------------------------------- types
 
     /** `{ "minecraft:oak_stairs": "minecraft:diamond_block" }` — flat, applies in every dimension. */
-    fun readTypes(path: Path): TypePreset {
+    fun parseTypes(text: String, source: Any): TypePreset {
         val preset = TypePreset()
-        if (path.notExists()) return preset
-
-        val root = runCatching { JsonParser.parseString(path.readText()).asJsonObject }
-            .onFailure { LOGGER.error("Could not parse {}", path, it) }
-            .getOrNull() ?: return preset
+        val root = parseRoot(text, source) ?: return preset
 
         for ((sourceId, donorId) in root.entrySet()) {
-            val source = block(sourceId, path) ?: continue
-            val donor = block(donorId.asString, path) ?: continue
-            preset.map[source] = donor
+            val from = block(sourceId, source) ?: continue
+            val donor = block(donorId.asString, source) ?: continue
+            preset.map[from] = donor
         }
         return preset
     }
 
-    fun writeTypes(path: Path, preset: TypePreset) {
+    fun readTypes(path: Path): TypePreset =
+        if (path.notExists()) TypePreset() else parseTypes(path.readText(), path)
+
+    fun renderTypes(preset: TypePreset): String {
         val root = JsonObject()
-        for ((source, donor) in preset.map) {
+        for ((from, donor) in preset.map) {
             root.addProperty(
-                BuiltInRegistries.BLOCK.getKey(source).toString(),
+                BuiltInRegistries.BLOCK.getKey(from).toString(),
                 BuiltInRegistries.BLOCK.getKey(donor).toString(),
             )
         }
-        path.createParentDirectories()
-        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
+        return ApJson.PRETTY.toJson(root) + "\n"
     }
+
+    fun writeTypes(path: Path, preset: TypePreset) = write(path, renderTypes(preset))
 
     // ---------------------------------------------------------------- palettes
 
     /** `{ "minecraft:stone": 70, "minecraft:cobblestone": 20 }` — relative draw weights. */
-    fun readPalette(path: Path): PalettePreset {
+    fun parsePalette(text: String, source: Any): PalettePreset {
         val preset = PalettePreset()
-        if (path.notExists()) return preset
-
-        val root = runCatching { JsonParser.parseString(path.readText()).asJsonObject }
-            .onFailure { LOGGER.error("Could not parse {}", path, it) }
-            .getOrNull() ?: return preset
+        val root = parseRoot(text, source) ?: return preset
 
         for ((blockId, weight) in root.entrySet()) {
-            val block = block(blockId, path) ?: continue
+            val block = block(blockId, source) ?: continue
             val parsed = runCatching { weight.asInt }.getOrElse {
-                LOGGER.warn("Skipping malformed weight for '{}' in {}", blockId, path)
+                LOGGER.warn("Skipping malformed weight for '{}' in {}", blockId, source)
                 return@getOrElse PalettePreset.MIN_WEIGHT
             }
             preset.weights[block] = parsed.coerceIn(PalettePreset.MIN_WEIGHT, PalettePreset.MAX_WEIGHT)
@@ -263,14 +270,18 @@ object PresetCodec {
         return preset
     }
 
-    fun writePalette(path: Path, preset: PalettePreset) {
+    fun readPalette(path: Path): PalettePreset =
+        if (path.notExists()) PalettePreset() else parsePalette(path.readText(), path)
+
+    fun renderPalette(preset: PalettePreset): String {
         val root = JsonObject()
         for ((block, weight) in preset.weights) {
             root.addProperty(BuiltInRegistries.BLOCK.getKey(block).toString(), weight)
         }
-        path.createParentDirectories()
-        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
+        return ApJson.PRETTY.toJson(root) + "\n"
     }
+
+    fun writePalette(path: Path, preset: PalettePreset) = write(path, renderPalette(preset))
 
     // ---------------------------------------------------------------- rulesets
 
@@ -297,42 +308,46 @@ object PresetCodec {
      * }
      * ```
      */
-    fun readRuleset(path: Path): RulesetPreset {
+    fun parseRuleset(text: String, source: Any): RulesetPreset {
         val preset = RulesetPreset()
-        val root = readRoot(path) ?: return preset
+        val root = parseRoot(text, source) ?: return preset
 
         for ((key, value) in root.entrySet()) {
-            val selector = selector(key, path) ?: continue
-            val target = target(value.asString, path) ?: continue
+            val selector = selector(key, source) ?: continue
+            val target = target(value.asString, source) ?: continue
             preset.map[selector] = target
         }
         return preset
     }
 
-    fun writeRuleset(path: Path, preset: RulesetPreset) {
+    fun readRuleset(path: Path): RulesetPreset =
+        if (path.notExists()) RulesetPreset() else parseRuleset(path.readText(), path)
+
+    fun renderRuleset(preset: RulesetPreset): String {
         val root = JsonObject()
         for ((selector, target) in preset.map) {
             root.addProperty(selectorKey(selector), targetValue(target))
         }
-        path.createParentDirectories()
-        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
+        return ApJson.PRETTY.toJson(root) + "\n"
     }
 
-    private fun selector(key: String, path: Path): AreaSelector? = when (key) {
+    fun writeRuleset(path: Path, preset: RulesetPreset) = write(path, renderRuleset(preset))
+
+    private fun selector(key: String, source: Any): AreaSelector? = when (key) {
         KEY_EVERYTHING -> AreaSelector.Everything
         KEY_UNPAINTED -> AreaSelector.Unpainted
         else -> {
             val cut = key.lastIndexOf(PAINT_SEPARATOR)
-            val block = block(if (cut < 0) key else key.substring(0, cut), path)
-            val paint = paintFilter(if (cut < 0) null else key.substring(cut + 1), path)
+            val block = block(if (cut < 0) key else key.substring(0, cut), source)
+            val paint = paintFilter(if (cut < 0) null else key.substring(cut + 1), source)
             if (block == null || paint == null) null else AreaSelector.Type(block, paint)
         }
     }
 
-    private fun paintFilter(raw: String?, path: Path): PaintFilter? = when (raw) {
+    private fun paintFilter(raw: String?, source: Any): PaintFilter? = when (raw) {
         null -> PaintFilter.AnyPaint
         PAINT_NONE -> PaintFilter.Unpainted
-        else -> block(raw, path)?.let { PaintFilter.PaintedAs(it) }
+        else -> block(raw, source)?.let { PaintFilter.PaintedAs(it) }
     }
 
     private fun selectorKey(selector: AreaSelector): String = when (selector) {
@@ -349,16 +364,16 @@ object PresetCodec {
         }
     }
 
-    private fun target(raw: String, path: Path): AreaTarget? {
+    private fun target(raw: String, source: Any): AreaTarget? {
         if (raw.startsWith(PALETTE_PREFIX)) {
             val name = ApPaths.sanitize(raw.removePrefix(PALETTE_PREFIX))
             if (name.isEmpty()) {
-                LOGGER.warn("Skipping blank palette name '{}' in {}", raw, path)
+                LOGGER.warn("Skipping blank palette name '{}' in {}", raw, source)
                 return null
             }
             return AreaTarget.Palette(name)
         }
-        return block(raw, path)?.let { AreaTarget.Donor(it) }
+        return block(raw, source)?.let { AreaTarget.Donor(it) }
     }
 
     private fun targetValue(target: AreaTarget): String = when (target) {
@@ -368,26 +383,31 @@ object PresetCodec {
 
     // ---------------------------------------------------------------- shared
 
-    private fun block(id: String, path: Path): Block? {
+    private fun write(path: Path, text: String) {
+        path.createParentDirectories()
+        path.writeText(text)
+    }
+
+    private fun block(id: String, source: Any): Block? {
         val identifier = Identifier.tryParse(id)
         if (identifier == null || !BuiltInRegistries.BLOCK.containsKey(identifier)) {
-            LOGGER.warn("Skipping unknown block '{}' in {}", id, path)
+            LOGGER.warn("Skipping unknown block '{}' in {}", id, source)
             return null
         }
         return BuiltInRegistries.BLOCK.getValue(identifier)
     }
 
-    private fun parsePos(raw: String, path: Path): BlockPos? {
+    private fun parsePos(raw: String, source: Any): BlockPos? {
         val parts = raw.split(',')
         if (parts.size != 3) {
-            LOGGER.warn("Skipping malformed coordinate '{}' in {}", raw, path)
+            LOGGER.warn("Skipping malformed coordinate '{}' in {}", raw, source)
             return null
         }
         val x = parts[0].trim().toIntOrNull()
         val y = parts[1].trim().toIntOrNull()
         val z = parts[2].trim().toIntOrNull()
         if (x == null || y == null || z == null) {
-            LOGGER.warn("Skipping malformed coordinate '{}' in {}", raw, path)
+            LOGGER.warn("Skipping malformed coordinate '{}' in {}", raw, source)
             return null
         }
         return BlockPos(x, y, z)

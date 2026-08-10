@@ -1,10 +1,12 @@
 package com.maxisch.client.gui.tab
 
+import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
+import com.maxisch.client.render.PaintedOverlay
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
@@ -59,18 +61,36 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
         Button.builder(brushLabel()) {
             PaintBrush.enabled = !PaintBrush.enabled
             refresh()
-        }.width(110).build(),
+        }
+            .width(110)
+            // Erasing one position is a world action with no button behind it, so the brush toggle
+            // is where the key gets named.
+            .tooltip(KeyHints.eraseTooltip())
+            .build(),
     )
 
     private val sizeButton = add(
         Button.builder(sizeLabel()) { cycleSize() }
             .width(90)
-            .tooltip(hint())
+            // The hold-and-scroll gesture is invisible otherwise; KeyHints fills in the live key.
+            .tooltip(KeyHints.resizeTooltip())
             .build(),
     )
 
     private val modeButton = add(
         Button.builder(modeLabel()) { cycleMode() }.width(120).build(),
+    )
+
+    private val overlayButton = add(
+        Button.builder(overlayLabel()) {
+            ApSettings.showPaintedOverlay = !ApSettings.showPaintedOverlay
+            ApSettings.save()
+            PaintedOverlay.invalidate()
+            refresh()
+        }
+            .width(110)
+            .tooltip(KeyHints.overlayTooltip())
+            .build(),
     )
 
     private val applyButton = add(
@@ -133,6 +153,7 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
 
         y = placeRow(x, y, donorButton, brushButton, sizeButton)
         y = placeRow(x, y, modeButton, applyButton, clearButton)
+        y = placeRow(x, y, overlayButton)
         y += GAP
 
         val listHeight = (area.bottom() - y - GAP).coerceAtLeast(ROW_HEIGHT)
@@ -169,8 +190,17 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
         sizeButton.message = sizeLabel()
         modeButton.message = modeLabel()
         clearButton.message = clearLabel()
+        overlayButton.message = overlayLabel()
         applyButton.active = pendingIsValid()
     }
+
+    private fun overlayLabel(): Component = Component.translatable(
+        if (ApSettings.showPaintedOverlay) {
+            "austrianpainter.overlay.button_on"
+        } else {
+            "austrianpainter.overlay.button_off"
+        },
+    )
 
     private fun cycleSize() {
         val next = if (PaintBrush.radius >= PaintBrush.MAX_RADIUS) PaintBrush.MIN_RADIUS else PaintBrush.radius + 1
@@ -267,7 +297,4 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
         is Row.Type -> Component.translatable("austrianpainter.rule.type", row.source.name, row.target.name)
         is Row.Donor -> Component.translatable("austrianpainter.rule.donor", row.donor.name, row.count)
     }
-
-    /** The hold-and-scroll gesture is invisible otherwise; [KeyHints] fills in the live key. */
-    private fun hint() = com.maxisch.client.KeyHints.resizeTooltip()
 }
