@@ -111,8 +111,17 @@ class PalettePreset(
     class Picker(private val blocks: Array<Block>, private val cumulative: IntArray) {
         private val total = cumulative.last()
 
-        fun next(random: RandomSource): Block {
-            val roll = random.nextInt(total)
+        fun next(random: RandomSource): Block = pick(random.nextInt(total))
+
+        /**
+         * The same draw, seeded from where the block is instead of from a [RandomSource]. A rule
+         * evaluated while a chunk section bakes is evaluated again every time that section is
+         * rebuilt, so the roll has to be a pure function of the position or the colour changes
+         * under the player - see [PositionSeed].
+         */
+        fun at(seed: Int): Block = pick(Math.floorMod(seed, total))
+
+        private fun pick(roll: Int): Block {
             var low = 0
             var high = cumulative.size - 1
             while (low < high) {
