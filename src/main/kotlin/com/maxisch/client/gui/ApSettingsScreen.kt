@@ -70,6 +70,24 @@ object ApSettingsScreen {
                             )
                             .option(
                                 Option.createBuilder<Boolean>()
+                                    .name(Component.translatable("austrianpainter.settings.show_looking_at"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable(
+                                                "austrianpainter.settings.show_looking_at.desc",
+                                            ),
+                                        ),
+                                    )
+                                    .binding(
+                                        true,
+                                        { ApSettings.showLookingAt },
+                                        { ApSettings.showLookingAt = it },
+                                    )
+                                    .controller { TickBoxControllerBuilder.create(it) }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Boolean>()
                                     .name(Component.translatable("austrianpainter.settings.paint_sound"))
                                     .description(
                                         OptionDescription.of(
@@ -104,6 +122,24 @@ object ApSettingsScreen {
                                             .range(PaintBrush.MIN_RADIUS, PaintBrush.MAX_RADIUS)
                                             .step(1)
                                     }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Boolean>()
+                                    .name(Component.translatable("austrianpainter.settings.keybinds_enabled"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable(
+                                                "austrianpainter.settings.keybinds_enabled.desc",
+                                            ),
+                                        ),
+                                    )
+                                    .binding(
+                                        true,
+                                        { ApSettings.keybindsEnabled },
+                                        { ApSettings.keybindsEnabled = it },
+                                    )
+                                    .controller { TickBoxControllerBuilder.create(it) }
                                     .build(),
                             )
                             .build(),

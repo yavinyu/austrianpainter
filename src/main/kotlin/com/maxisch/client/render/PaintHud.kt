@@ -7,6 +7,7 @@ import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
 import com.maxisch.paint.session.PaintArea
 import com.maxisch.paint.session.PaintBrush
+import com.maxisch.paint.session.PaintSelection
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.DeltaTracker
@@ -47,6 +48,17 @@ object PaintHud : HudElement {
                 // mistaken for the real thing.
                 if (forced) 0xFFFFAA00.toInt() else 0xFF55FFFF.toInt(),
             )
+            y += 10
+        }
+
+        if (ApSettings.showLookingAt) {
+            val looked = PaintSelection.lookedAtBlock()
+            val line = if (looked == null) {
+                Component.translatable("austrianpainter.hud.looking_miss")
+            } else {
+                Component.translatable("austrianpainter.hud.looking_at", looked.name)
+            }
+            graphics.text(client.font, line, 4, y, 0xFF55AAFF.toInt())
             y += 10
         }
 
