@@ -195,8 +195,8 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 tasks.jar {
-    from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}" }
+    from("LICENSE.txt") {
+        rename { "LICENSE_${project.base.archivesName.get()}" }
     }
 }
 

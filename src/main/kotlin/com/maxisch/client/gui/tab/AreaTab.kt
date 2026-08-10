@@ -1,15 +1,9 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.BlockPickerScreen
-import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
-import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PalettePreset
-import com.maxisch.paint.PresetStores
-import com.maxisch.paint.session.AreaScan
 import com.maxisch.paint.session.PaintArea
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
@@ -17,14 +11,14 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
-import net.minecraft.util.RandomSource
 import net.minecraft.world.item.ItemStack
-import net.minecraft.world.level.block.Block
 
 /**
  * Box selection workflow: set two corners, see what is actually inside the box, then repaint one of
  * those block types. The replace is flattened to positions straight away, so it behaves exactly like
  * a very large brush stroke and nothing new has to be persisted.
+ *
+ * Owns the widgets and layout only; the scan/apply rules live in [AreaScanLogic].
  */
 class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.area") {
 
@@ -45,11 +39,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         const val RESCAN_DELAY_TICKS = 8
     }
 
-    private sealed interface Row {
-        /** Synthetic first row: every non-air block in the box. */
-        data class All(val count: Int) : Row
-        data class Type(val block: Block, val count: Int) : Row
-    }
+    private val logic = AreaScanLogic(screen)
 
     private var rescanIn = -1
     private var suppressResponder = false
@@ -92,41 +82,49 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     )
 
     private val replaceButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.replace")) { replace() }.width(110).build(),
+        Button.builder(Component.translatable("austrianpainter.area.replace")) {
+            logic.replace()
+            rescan()
+        }.width(110).build(),
     )
 
     private val replaceRandomButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.replace_random")) { replaceRandom() }
-            .width(130).build(),
+        Button.builder(Component.translatable("austrianpainter.area.replace_random")) {
+            logic.replaceRandom()
+            rescan()
+        }.width(130).build(),
     )
 
     private val rerollButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.reroll")) { reroll() }.width(80).build(),
+        Button.builder(Component.translatable("austrianpainter.area.reroll")) {
+            logic.reroll()
+            refreshButtons()
+        }.width(80).build(),
     )
 
     private val clearPaintedButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.clear_painted")) { clearPainted() }
+        Button.builder(Component.translatable("austrianpainter.area.clear_painted")) { logic.clearPainted() }
             .width(150).build(),
     )
 
     private val list = add(
-        RowListWidget<Row>(0, 0, 0, 0, ROW_HEIGHT).apply {
-            emptyMessage = { emptyText() }
+        RowListWidget<AreaScanLogic.Row>(0, 0, 0, 0, ROW_HEIGHT).apply {
+            emptyMessage = { logic.emptyText() }
             hoverTooltip = { Component.translatable("austrianpainter.area.pick_source") }
             isSelected = { row ->
                 when (row) {
-                    is Row.All -> PaintArea.sourceAll
-                    is Row.Type -> !PaintArea.sourceAll && row.block == PaintArea.source
+                    is AreaScanLogic.Row.All -> PaintArea.sourceAll
+                    is AreaScanLogic.Row.Type -> !PaintArea.sourceAll && row.block == PaintArea.source
                 }
             }
             onRowClick = { row ->
                 when (row) {
-                    is Row.All -> {
+                    is AreaScanLogic.Row.All -> {
                         PaintArea.sourceAll = true
                         PaintArea.source = null
                     }
 
-                    is Row.Type -> {
+                    is AreaScanLogic.Row.Type -> {
                         PaintArea.sourceAll = false
                         PaintArea.source = row.block
                     }
@@ -135,8 +133,8 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             }
             drawRow = { graphics, row, x, y, _ ->
                 val label = when (row) {
-                    is Row.All -> Component.translatable("austrianpainter.area.row_all", row.count)
-                    is Row.Type -> {
+                    is AreaScanLogic.Row.All -> Component.translatable("austrianpainter.area.row_all", row.count)
+                    is AreaScanLogic.Row.Type -> {
                         val stack = ItemStack(row.block)
                         if (!stack.isEmpty) graphics.item(stack, x + 2, y - 1)
                         Component.translatable("austrianpainter.area.row", row.block.name, row.count)
@@ -270,156 +268,21 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
     private fun rescan() {
         rescanIn = -1
-
-        val level = Minecraft.getInstance().level
-        list.rows = if (level == null || !PaintArea.complete || tooBig()) {
-            emptyList()
-        } else {
-            val histogram = AreaScan.histogram(level)
-            buildList {
-                add(Row.All(histogram.values.sum()))
-                histogram.forEach { (block, count) -> add(Row.Type(block, count)) }
-            }
-        }
-
-        // Drop a source that is no longer in the box so the button state cannot lie.
-        if (list.rows.none { it is Row.Type && it.block == PaintArea.source }) PaintArea.source = null
-
+        list.rows = logic.scan()
         refreshButtons()
     }
-
-    private fun tooBig(): Boolean = PaintArea.volume() > PaintArea.MAX_VOLUME
-
-    private fun palette(): PalettePreset = PresetStores.palettes.active
 
     private fun refreshButtons() {
-        val usable = PaintArea.complete && !tooBig() && PaintArea.hasSource
+        val usable = PaintArea.complete && !logic.tooBig() && PaintArea.hasSource
         replaceButton.active = usable && PaintArea.donor != null
-        replaceRandomButton.active = usable && !palette().isEmpty()
-        rerollButton.active = PaintArea.lastApplied.isNotEmpty() && !palette().isEmpty()
-        clearPaintedButton.active = PaintArea.complete && !tooBig()
+        replaceRandomButton.active = usable && !logic.palette().isEmpty()
+        rerollButton.active = PaintArea.lastApplied.isNotEmpty() && !logic.palette().isEmpty()
+        clearPaintedButton.active = PaintArea.complete && !logic.tooBig()
 
-        sizeLine.message = sizeText()
-        sizeLine.color = if (tooBig()) RED else GREY
-        sourceLine.message = sourceText()
-        donorLine.message = donorText()
-        list.emptyColor = if (tooBig()) RED else RowListWidget.EMPTY_TEXT
-    }
-
-    // ------------------------------------------------------------------ actions
-
-    /** One donor for the whole selection. */
-    private fun replace() {
-        val donor = PaintArea.donor ?: return
-        val positions = targetPositions() ?: return
-
-        PaintArea.lastApplied = positions
-        val painted = PaintStorage.paintPositions(positions, donor)
-        screen.status(
-            Component.translatable("austrianpainter.area.replaced_donor", painted, sourceName(), donor.name),
-        )
-        rescan()
-    }
-
-    /** A weighted draw from the active palette, one roll per position. */
-    private fun replaceRandom() {
-        val positions = targetPositions() ?: return
-
-        PaintArea.lastApplied = positions
-        val painted = draw(positions)
-        screen.status(
-            Component.translatable(
-                "austrianpainter.area.replaced",
-                painted,
-                sourceName(),
-                PresetStores.palettes.activeName,
-            ),
-        )
-        rescan()
-    }
-
-    /** Redraws the previous apply. The same positions, a fresh roll of the same palette. */
-    private fun reroll() {
-        val positions = PaintArea.lastApplied
-        if (positions.isEmpty()) return
-
-        val painted = draw(positions)
-        screen.status(Component.translatable("austrianpainter.area.rerolled", painted))
-        refreshButtons()
-    }
-
-    private fun targetPositions(): List<BlockPos>? {
-        val level = Minecraft.getInstance().level ?: return null
-        if (!PaintArea.hasSource) return null
-
-        return if (PaintArea.sourceAll) {
-            AreaScan.allPositions(level)
-        } else {
-            AreaScan.positionsOf(level, PaintArea.source ?: return null)
-        }
-    }
-
-    private fun draw(positions: List<BlockPos>): Int {
-        val picker = palette().picker() ?: return 0
-        val random = RandomSource.create()
-        return PaintStorage.paintPositions(positions) { picker.next(random) }
-    }
-
-    private fun clearPainted() {
-        if (!PaintArea.complete || tooBig()) return
-
-        ConfirmAction.ask(
-            screen,
-            Component.translatable("austrianpainter.area.clear_painted.confirm.title"),
-            Component.translatable("austrianpainter.area.clear_painted.confirm.message", PaintArea.volume()),
-        ) {
-            val cleared = PaintStorage.unpaintPositions(PaintArea.positions().toList())
-            screen.status(Component.translatable("austrianpainter.area.cleared", cleared))
-        }
-    }
-
-    // ------------------------------------------------------------------ labels
-
-    private fun sizeText(): Component {
-        val min = PaintArea.min()
-        val max = PaintArea.max()
-        if (min == null || max == null) return KeyHints.cornerHint()
-        if (tooBig()) return Component.translatable("austrianpainter.area.too_big", PaintArea.MAX_VOLUME)
-
-        return Component.translatable(
-            "austrianpainter.area.size",
-            max.x - min.x + 1,
-            max.y - min.y + 1,
-            max.z - min.z + 1,
-            PaintArea.volume(),
-        )
-    }
-
-    private fun sourceName(): Component =
-        if (PaintArea.sourceAll) {
-            Component.translatable("austrianpainter.area.everything")
-        } else {
-            PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source")
-        }
-
-    private fun sourceText(): Component =
-        if (PaintArea.hasSource) {
-            Component.translatable("austrianpainter.area.source_line", sourceName())
-        } else {
-            Component.translatable("austrianpainter.area.no_source")
-        }
-
-    /** Both apply paths at once, so it is obvious which of the two buttons is ready. */
-    private fun donorText(): Component = Component.translatable(
-        "austrianpainter.area.donor_line",
-        PaintArea.donor?.name ?: Component.translatable("austrianpainter.area.any_source"),
-        PresetStores.palettes.activeName,
-        palette().size,
-    )
-
-    private fun emptyText(): Component = when {
-        !PaintArea.complete -> KeyHints.cornerHint()
-        tooBig() -> Component.translatable("austrianpainter.area.too_big", PaintArea.MAX_VOLUME)
-        else -> Component.translatable("austrianpainter.area.scan_empty")
+        sizeLine.message = logic.sizeText()
+        sizeLine.color = if (logic.tooBig()) RED else GREY
+        sourceLine.message = logic.sourceText()
+        donorLine.message = logic.donorText()
+        list.emptyColor = if (logic.tooBig()) RED else RowListWidget.EMPTY_TEXT
     }
 }
