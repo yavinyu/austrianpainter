@@ -120,3 +120,6 @@ runs/
 
 # Temporary offline workaround for the missing yarn 26.2 mappings
 .offline-libs/
+
+# Guard against accidental preset-export drops at repo root (see block-config/ under run/config/ap/)
+/*.json
