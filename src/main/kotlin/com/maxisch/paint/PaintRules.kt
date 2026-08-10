@@ -37,10 +37,15 @@ object PaintRules {
         applyTypeChange()
     }
 
-    /** Undo path: puts the rule back exactly as it was, without recording the change. */
-    internal fun restoreTypeRule(step: PaintHistory.TypeRule) {
+    /**
+     * Undo/redo path: puts the rule back exactly as it was, without recording the change, and hands
+     * back the step that would undo *this* one.
+     */
+    internal fun restoreTypeRule(step: PaintHistory.TypeRule): PaintHistory.TypeRule {
+        val displaced = types.map[step.source]
         if (step.prior == null) types.map.remove(step.source) else types.map[step.source] = step.prior
         applyTypeChange()
+        return PaintHistory.TypeRule(step.source, displaced, step.label)
     }
 
     /**
@@ -206,19 +211,29 @@ object PaintRules {
     }
 
     /**
-     * Undo path: writes a recorded step's prior state back. Rebuilds everything rather than the
-     * touched range - the step's coordinates are in slice space, and projecting them back to world
-     * space just to narrow a rebuild is not worth the room-rotation arithmetic.
+     * Undo/redo path: writes a recorded step's prior state back, and returns the step that puts
+     * things back the way they were - which is what makes a redo stack possible. Rebuilds everything
+     * rather than the touched range: the step's coordinates are in slice space, and projecting them
+     * back to world space just to narrow a rebuild is not worth the room-rotation arithmetic.
      */
-    internal fun restorePositions(step: PaintHistory.Positions): Int {
-        val map = activeSlice(create = true)?.map ?: return 0
+    internal fun restorePositions(step: PaintHistory.Positions): PaintHistory.Positions? {
+        val map = activeSlice(create = true)?.map ?: return null
 
-        step.wasUnpainted.forEach { key -> map.remove(key) }
-        for (entry in step.wasPainted.long2ObjectEntrySet()) map.put(entry.longKey, entry.value)
+        // Capture the current value of every key before touching it - the inverse of this step is
+        // exactly what it is about to displace.
+        val inverse = PaintHistory.Positions(step.scopeKey, step.label)
+        step.wasUnpainted.forEach { key ->
+            inverse.record(key, map.get(key))
+            map.remove(key)
+        }
+        for (entry in step.wasPainted.long2ObjectEntrySet()) {
+            inverse.record(entry.longKey, map.get(entry.longKey))
+            map.put(entry.longKey, entry.value)
+        }
 
         PaintIndexBuilder.refresh()
         PaintSession.markDirty()
         ChunkRebuild.markAll()
-        return step.cost
+        return inverse
     }
 }

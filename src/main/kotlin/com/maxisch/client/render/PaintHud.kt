@@ -67,7 +67,21 @@ object PaintHud : HudElement {
             }
         }
 
-        areaLine()?.let { graphics.text(client.font, it, 4, y, 0xFFFFAA55.toInt()) }
+        areaLine()?.let {
+            graphics.text(client.font, it, 4, y, 0xFFFFAA55.toInt())
+            y += 10
+        }
+
+        // A highlight that quietly drew half the blocks would be worse than none, so say it refused.
+        if (BlockHighlight.truncated) {
+            graphics.text(
+                client.font,
+                Component.translatable("austrianpainter.overlay.capped"),
+                4,
+                y,
+                0xFFFF5555.toInt(),
+            )
+        }
     }
 
     private fun areaLine(): Component? = when {

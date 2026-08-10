@@ -30,4 +30,25 @@ object KeyHints {
         name(PaintKeys.cornerFirstKey),
         name(PaintKeys.cornerSecondKey),
     )
+
+    /** "Look at a block and press X to erase it" - the only way to unpaint one position. */
+    fun eraseHint(): Component =
+        Component.translatable("austrianpainter.brush.erase_hint", name(PaintKeys.brushEraseKey))
+
+    fun eraseTooltip(): Tooltip = Tooltip.create(eraseHint())
+
+    /** "Undo (N) - X", so the footer button names the key that does the same thing. */
+    fun undoTooltip(): Tooltip =
+        Tooltip.create(Component.translatable("austrianpainter.undo.hint", name(PaintKeys.undoKey)))
+
+    /** "X clears the box" - the clear-selection key is otherwise advertised nowhere. */
+    fun clearAreaTooltip(): Tooltip =
+        Tooltip.create(Component.translatable("austrianpainter.area.clear_hint", name(PaintKeys.clearAreaKey)))
+
+    fun redoTooltip(): Tooltip =
+        Tooltip.create(Component.translatable("austrianpainter.redo.hint", name(PaintKeys.redoKey)))
+
+    fun overlayTooltip(): Tooltip = Tooltip.create(
+        Component.translatable("austrianpainter.overlay.hint", name(PaintKeys.toggleOverlayKey)),
+    )
 }

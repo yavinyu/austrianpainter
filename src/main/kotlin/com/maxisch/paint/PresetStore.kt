@@ -1,6 +1,7 @@
 package com.maxisch.paint
 
 import com.maxisch.paint.ApLog.LOGGER
+import net.minecraft.network.chat.Component
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.copyTo
@@ -21,6 +22,12 @@ class PresetStore<P : Any>(
     private val writer: (Path, P) -> Unit,
     private val empty: () -> P,
     private val describe: (P) -> Int,
+    /** One line per entry, for the contents pane. Kinds render their own rows. */
+    private val lines: (P) -> List<Component> = { emptyList() },
+    /** The preset as the text a file would hold, for sharing it through the clipboard. */
+    private val render: (P) -> String = { "" },
+    /** The inverse of [render]; the label is only used in log messages. */
+    private val parse: (String, String) -> P = { _, _ -> empty() },
 ) {
 
     var activeName: String = ApSettings.DEFAULT_PRESET
@@ -58,6 +65,23 @@ class PresetStore<P : Any>(
     fun entryCount(name: String): Int =
         if (name == activeName) describe(active) else runCatching { describe(reader(path(name))) }.getOrElse { 0 }
 
+    /**
+     * What is inside [name], one line per entry. Cached by name: the contents pane asks on every
+     * refresh, and re-reading a file for that would be silly.
+     */
+    fun contents(name: String): List<Component> {
+        if (name == activeName) return lines(active)
+        cached[name]?.let { return it }
+        return lines(read(name)).also {
+            // One entry is enough: the pane only ever shows the selected preset.
+            cached.clear()
+            cached[name] = it
+        }
+    }
+
+    /** Dropped whenever this store writes, so a saved change shows up in the pane immediately. */
+    private val cached = HashMap<String, List<Component>>()
+
     // ---------------------------------------------------------------- active preset
 
     fun load(name: String) {
@@ -81,10 +105,39 @@ class PresetStore<P : Any>(
     }
 
     fun saveActive() {
+        cached.clear()
         runCatching {
             ApPaths.ensureDirectories()
             writer(path(activeName), active)
         }.onFailure { LOGGER.error("Could not save preset '{}'", activeName, it) }
+    }
+
+    // ---------------------------------------------------------------- sharing
+
+    /** The active preset as text, ready for the clipboard. */
+    fun exportActive(): String = render(active)
+
+    /**
+     * Creates a new preset called [name] from [text]. Deliberately never overwrites: a paste is the
+     * one action where the source is unreadable before it lands. Returns the sanitised name, or
+     * null if the name was blank or taken.
+     *
+     * Junk text parses to an empty preset with a logged warning rather than failing, the same way a
+     * malformed file already does - the file is there to be fixed by hand afterwards.
+     */
+    fun importAs(name: String, text: String): String? {
+        val clean = ApPaths.sanitize(name)
+        if (clean.isEmpty() || exists(clean)) return null
+
+        cached.clear()
+        runCatching {
+            ApPaths.ensureDirectories()
+            writer(path(clean), parse(text, "clipboard"))
+        }.onFailure {
+            LOGGER.error("Could not import preset '{}'", clean, it)
+            return null
+        }
+        return clean
     }
 
     // ---------------------------------------------------------------- management

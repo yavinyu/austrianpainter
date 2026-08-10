@@ -1,8 +1,10 @@
 package com.maxisch.client.gui
 
+import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.tab.ApTab
 import com.maxisch.client.gui.tab.AreaTab
 import com.maxisch.client.gui.tab.BrushTab
+import com.maxisch.client.gui.tab.HistoryTab
 import com.maxisch.client.gui.tab.PaletteTab
 import com.maxisch.client.gui.tab.PresetsTab
 import com.maxisch.paint.PaintStorage
@@ -33,11 +35,13 @@ import net.minecraft.world.level.block.Block
 class PainterScreen private constructor(parent: Screen?) :
     ApScreen(Component.translatable("austrianpainter.screen.title"), parent) {
 
+    /** Declaration order must match the tab list built in [init] - [onTabEntered] maps by index. */
     enum class TabId(val titleKey: String) {
         BRUSH("austrianpainter.tab.brush"),
         AREA("austrianpainter.tab.area"),
         PALETTE("austrianpainter.tab.palette"),
         PRESETS("austrianpainter.tab.presets"),
+        HISTORY("austrianpainter.tab.history"),
     }
 
     companion object {
@@ -80,6 +84,7 @@ class PainterScreen private constructor(parent: Screen?) :
     private var tabBar: TabNavigationBar? = null
     private var tabs: List<ApTab> = emptyList()
     private var undoButton: Button? = null
+    private var redoButton: Button? = null
 
     /**
      * Captured once when the screen opens: the crosshair freezes the moment any screen is up, so
@@ -120,16 +125,23 @@ class PainterScreen private constructor(parent: Screen?) :
             it.message = undoLabel()
             it.active = PaintStorage.canUndo
         }
+        redoButton?.let {
+            it.message = redoLabel()
+            it.active = PaintStorage.canRedo
+        }
     }
 
     private fun undoLabel(): Component =
         Component.translatable("austrianpainter.undo.button", PaintStorage.undoDepth)
 
+    private fun redoLabel(): Component =
+        Component.translatable("austrianpainter.redo.button", PaintStorage.redoDepth)
+
     override fun init() {
         lookedAtPos = PaintSelection.lookedAtPos()
         lookedAtBlock = PaintSelection.lookedAtBlock()
 
-        tabs = listOf(BrushTab(this), AreaTab(this), PaletteTab(this), PresetsTab(this))
+        tabs = listOf(BrushTab(this), AreaTab(this), PaletteTab(this), PresetsTab(this), HistoryTab(this))
 
         val bar = TabNavigationBar.builder(tabManager, width)
             .addTabs(*tabs.toTypedArray<Tab>())
@@ -141,7 +153,19 @@ class PainterScreen private constructor(parent: Screen?) :
             Button.builder(undoLabel()) {
                 status(PaintStorage.undo())
                 refreshTabs()
-            }.width(100).build(),
+            }
+                .width(100)
+                .tooltip(KeyHints.undoTooltip())
+                .build(),
+        )
+        redoButton = footer.addChild(
+            Button.builder(redoLabel()) {
+                status(PaintStorage.redo())
+                refreshTabs()
+            }
+                .width(100)
+                .tooltip(KeyHints.redoTooltip())
+                .build(),
         )
         footer.addChild(
             Button.builder(Component.translatable("austrianpainter.settings")) {

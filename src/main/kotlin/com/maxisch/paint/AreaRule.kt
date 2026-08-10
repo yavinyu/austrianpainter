@@ -1,5 +1,6 @@
 package com.maxisch.paint
 
+import net.minecraft.network.chat.Component
 import net.minecraft.world.level.block.Block
 
 /**
@@ -39,6 +40,23 @@ sealed interface PaintFilter {
     data object Unpainted : PaintFilter
 
     data class PaintedAs(val donor: Block) : PaintFilter
+}
+
+/** How a selector reads in the area list, the rule rows and the preset contents pane. */
+fun AreaSelector.displayName(): Component = when (this) {
+    AreaSelector.Everything -> Component.translatable("austrianpainter.area.everything")
+    AreaSelector.Unpainted -> Component.translatable("austrianpainter.area.unpainted")
+    is AreaSelector.Type -> when (val filter = paint) {
+        PaintFilter.Unpainted -> block.name
+        PaintFilter.AnyPaint -> Component.translatable("austrianpainter.area.any_paint", block.name)
+        is PaintFilter.PaintedAs ->
+            Component.translatable("austrianpainter.area.painted_as", block.name, filter.donor.name)
+    }
+}
+
+fun AreaTarget.displayName(): Component = when (this) {
+    is AreaTarget.Donor -> block.name
+    is AreaTarget.Palette -> Component.translatable("austrianpainter.area.palette_target", name)
 }
 
 /** What the blocks a selector matched should be repainted as. */
