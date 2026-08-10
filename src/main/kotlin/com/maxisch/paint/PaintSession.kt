@@ -101,6 +101,19 @@ object PaintSession {
         }
     }
 
+    /**
+     * The device column layer just came on or went off. Unlike a room border this can change how
+     * every loaded section looks, so it always rebuilds the view.
+     *
+     * Walking into the arena fires this in the same tick as the boss scope change above, marking
+     * the same sections twice in one frame. Cheap enough that suppressing it would cost more state
+     * than it saves.
+     */
+    fun onDeviceScopeChanged() {
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
+
     private fun hasRoomPaint(room: RoomScope?): Boolean {
         if (room == null) return false
         val store = if (room.isBoss) PresetStores.bosses else PresetStores.rooms

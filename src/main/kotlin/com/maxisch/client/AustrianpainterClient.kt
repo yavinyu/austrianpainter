@@ -5,6 +5,7 @@ import com.maxisch.client.render.BlockHighlight
 import com.maxisch.client.render.PaintHud
 import com.maxisch.client.render.PaintedOverlay
 import com.maxisch.client.render.PaintModelPlugin
+import com.maxisch.dungeon.DeviceColumnData
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.dungeon.RoomTracker
 import com.maxisch.paint.ApSettings
@@ -34,6 +35,8 @@ class AustrianpainterClient : ClientModInitializer {
         PresetStores.rulesets.load(ApSettings.activeRuleset)
         // Reads the cached room list now and refreshes it in the background.
         RoomDataStore.start()
+        // Bundled, unlike the room list, so this is a few KB off the classloader and needs no thread.
+        DeviceColumnData.load()
 
         ModelLoadingPlugin.register(PaintModelPlugin)
         PaintKeys.register()

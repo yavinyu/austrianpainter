@@ -305,6 +305,21 @@ object ApSettingsScreen {
                                     }
                                     .build(),
                             )
+                            .option(
+                                ButtonOption.createBuilder()
+                                    .name(Component.translatable("austrianpainter.settings.device"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.device.desc"),
+                                        ),
+                                    )
+                                    // Its own screen rather than YACL options: a rule picks a block
+                                    // or a palette, and YACL has no controller for either.
+                                    .action { screen, _ ->
+                                        Minecraft.getInstance().setScreenAndShow(DeviceRulesScreen(screen))
+                                    }
+                                    .build(),
+                            )
                             .build(),
                     )
                     .build(),
