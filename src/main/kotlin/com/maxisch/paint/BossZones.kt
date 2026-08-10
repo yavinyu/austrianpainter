@@ -4,6 +4,7 @@ import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.paint.ApLog.LOGGER
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet
 import it.unimi.dsi.fastutil.objects.ReferenceSet
+import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
@@ -26,6 +27,8 @@ internal class ZoneBounds(
     private val maxZ: Int,
 ) {
     fun contains(x: Int, y: Int, z: Int): Boolean = x in minX..maxX && y in minY..maxY && z in minZ..maxZ
+
+    fun corners(): Pair<BlockPos, BlockPos> = BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
 }
 
 /** The five boss-room zones a player can aim a donor/palette at. */
@@ -80,6 +83,31 @@ object BossZones {
 
     /** How many rules are actually pointed at something, for the status command. */
     fun ruleCount(): Int = RULES.count { ApSettings.zoneRule(it) != null }
+
+    /**
+     * The bounding box of every zone. Always non-null - the zone list is fixed and never empty -
+     * so a rule change only ever needs to dirty this footprint, not the whole loaded view.
+     */
+    fun bounds(): Pair<BlockPos, BlockPos> {
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+        var maxZ = Int.MIN_VALUE
+
+        for (zone in BossZone.entries) {
+            val (min, max) = zone.bounds.corners()
+            if (min.x < minX) minX = min.x
+            if (min.y < minY) minY = min.y
+            if (min.z < minZ) minZ = min.z
+            if (max.x > maxX) maxX = max.x
+            if (max.y > maxY) maxY = max.y
+            if (max.z > maxZ) maxZ = max.z
+        }
+
+        return BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
+    }
 
     private var cache: ZoneRules? = null
 

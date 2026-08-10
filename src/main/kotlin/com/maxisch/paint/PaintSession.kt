@@ -2,6 +2,7 @@ package com.maxisch.paint
 
 import com.maxisch.dungeon.RoomScope
 import net.minecraft.client.Minecraft
+import net.minecraft.core.BlockPos
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 
@@ -102,8 +103,9 @@ object PaintSession {
     }
 
     /**
-     * The device column layer just came on or went off. Unlike a room border this can change how
-     * every loaded section looks, so it always rebuilds the view.
+     * The device column or boss zone layer just came on or went off. Both are physically incapable
+     * of painting outside their own fixed, compiled-in bounds, so only that footprint ever needs
+     * rebuilding - never the whole loaded view.
      *
      * Walking into the arena fires this in the same tick as the boss scope change above, marking
      * the same sections twice in one frame. Cheap enough that suppressing it would cost more state
@@ -111,7 +113,10 @@ object PaintSession {
      */
     fun onDeviceScopeChanged() {
         PaintIndexBuilder.refresh()
-        ChunkRebuild.markAll()
+        val corners = ArrayList<BlockPos>(4)
+        DeviceColumns.bounds()?.let { (min, max) -> corners.add(min); corners.add(max) }
+        BossZones.bounds().let { (min, max) -> corners.add(min); corners.add(max) }
+        ChunkRebuild.markRange(corners)
     }
 
     private fun hasRoomPaint(room: RoomScope?): Boolean {
