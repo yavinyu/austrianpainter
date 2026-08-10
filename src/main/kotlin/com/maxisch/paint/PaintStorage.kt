@@ -34,6 +34,15 @@ object PaintStorage {
 
     fun onDeviceScopeChanged() = PaintSession.onDeviceScopeChanged()
 
+    /** The dungeon floor was identified or lost; room and boss presets follow it. */
+    fun onDungeonFloorChanged(floor: Int?) = PaintSession.onDungeonFloorChanged(floor)
+
+    /** A room finished scanning, so its paint can now be projected into the index. */
+    fun onRoomLayoutChanged() = PaintSession.onRoomLayoutChanged()
+
+    /** Room paint as a whole was switched on or off; see [PaintSession.onRoomVisibilityChanged]. */
+    fun onRoomVisibilityChanged() = PaintSession.onRoomVisibilityChanged()
+
     fun tick() = PaintSession.tick()
 
     fun flush() = PaintSession.flush()

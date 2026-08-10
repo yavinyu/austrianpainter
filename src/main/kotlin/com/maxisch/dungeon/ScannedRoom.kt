@@ -36,7 +36,14 @@ internal class ScannedRoom(val data: RoomData, first: RoomTile, row: Int, column
      */
     internal fun corners(floor: Int): Pair<BlockPos, BlockPos>? {
         if (data.shape == RoomShape.SL) return null
+        return footprint(floor)
+    }
 
+    /**
+     * The same box without the L-room refusal, for deciding which chunk sections to rebuild: marking
+     * a few sections that belong to the neighbour costs a rebuild, not a wrong coordinate.
+     */
+    internal fun footprint(floor: Int): Pair<BlockPos, BlockPos>? {
         val solid = tiles.filterNot { it.isSeparator }
         if (solid.isEmpty()) return null
         val roof = highestBlock ?: WorldProbe.highestY(mainRoom.x, mainRoom.z).takeIf { it > 0 } ?: return null

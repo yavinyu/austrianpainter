@@ -25,12 +25,24 @@ object RoomScanner {
     private val grid = arrayOfNulls<Tile>(DungeonGrid.SIZE * DungeonGrid.SIZE)
     private val rooms = LinkedHashMap<String, ScannedRoom>()
 
+    /** Rooms that became oriented since the paint side last drained them; see [drainNewlyOriented]. */
+    private val newlyOriented = mutableListOf<ScannedRoom>()
+
+    /**
+     * Bumped whenever the set of oriented rooms changes. The paint side projects every oriented room
+     * into its index, so it has to notice a room appearing without polling the whole layout.
+     */
+    var layoutVersion: Int = 0
+        private set
+
     private var lastScan = 0L
     private var complete = false
 
     fun reset() {
         grid.fill(null)
         rooms.clear()
+        newlyOriented.clear()
+        layoutVersion++
         complete = false
         lastScan = 0L
     }
@@ -46,7 +58,7 @@ object RoomScanner {
         lastScan = now
 
         if (complete) {
-            rooms.values.forEach(ScannedRoom::findRotation)
+            orient()
             return
         }
         scan()
@@ -55,6 +67,42 @@ object RoomScanner {
     internal fun roomAt(pos: Vec3): ScannedRoom? {
         val (column, row) = DungeonGrid.cellAt(pos)
         return (grid[index(row, column)] as? RoomTile)?.room
+    }
+
+    /** Every room that knows where its marker corner is, and so can have its paint projected. */
+    internal fun orientedRooms(): List<ScannedRoom> = rooms.values.filter { it.oriented }
+
+    /**
+     * The scope a room's paint is stored against. Rotation is inverted here because [ScannedRoom]
+     * records which corner the marker sits on, while [RoomTransform] wants the turn that takes a
+     * stored position back to the world - keeping both conventions in one place is what stops the
+     * paint index and the paint scope from drifting apart.
+     */
+    internal fun scopeFor(room: ScannedRoom): RoomScope? {
+        val origin = room.clayPos ?: return null
+        val rotation = room.rotation ?: return null
+        return RoomScope(room.name, origin, 360 - rotation, isBoss = false)
+    }
+
+    /** Rooms oriented since the last call, so only their sections need rebuilding. */
+    internal fun drainNewlyOriented(): List<ScannedRoom> {
+        if (newlyOriented.isEmpty()) return emptyList()
+        val drained = newlyOriented.toList()
+        newlyOriented.clear()
+        return drained
+    }
+
+    /**
+     * Runs the marker search over every room still missing one, and records the ones that found it.
+     */
+    private fun orient() {
+        for (room in rooms.values) {
+            if (room.oriented) continue
+            room.findRotation()
+            if (!room.oriented) continue
+            newlyOriented.add(room)
+            layoutVersion++
+        }
     }
 
     private fun scan() {
@@ -78,7 +126,7 @@ object RoomScanner {
             }
         }
 
-        rooms.values.forEach(ScannedRoom::findRotation)
+        orient()
         if (allLoaded) complete = true
     }
 
