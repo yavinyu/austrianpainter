@@ -88,35 +88,49 @@ object PaintRules {
         return counts
     }
 
+    /**
+     * One batch of positions and the donor to give them. [donorFor] picks per position, which is
+     * how a palette apply spreads a weighted mix over an area - a lambda rather than a prepared
+     * map, because an area can hold millions of positions.
+     */
+    class Group(val positions: Collection<BlockPos>, val donorFor: (BlockPos) -> Block)
+
     fun paintPositions(positions: Collection<BlockPos>, target: Block): Int =
         paintPositions(positions) { target }
 
+    fun paintPositions(positions: Collection<BlockPos>, donorFor: (BlockPos) -> Block): Int =
+        paintGroups(listOf(Group(positions, donorFor)))
+
     /**
-     * [donorFor] picks the donor per position, which is how a palette apply spreads a weighted mix
-     * over the area. A lambda rather than a prepared map: an area can hold millions of positions.
+     * Paints several groups as one change. An area ruleset gives each block type its own donor, and
+     * running those through [paintPositions] one at a time would leave the player undoing a single
+     * click once per rule; one step here undoes the whole apply.
      */
-    fun paintPositions(positions: Collection<BlockPos>, donorFor: (BlockPos) -> Block): Int {
-        if (positions.isEmpty()) return 0
+    fun paintGroups(groups: List<Group>): Int {
+        val total = groups.sumOf { it.positions.size }
+        if (total == 0) return 0
         val slice = activeSlice(create = true) ?: return 0
 
         val step = PaintHistory.beginPositions(
             Component.translatable("austrianpainter.undo.label_paint"),
-            positions.size,
+            total,
         )
 
         // The donor is picked from the world position so a palette apply keeps its spread even
         // though the position is filed under the room's own coordinates.
-        positions.forEach {
-            val key = slice.toStorage(it).asLong()
-            val prior = slice.map.put(key, donorFor(it))
-            step?.record(key, prior)
+        for (group in groups) {
+            group.positions.forEach {
+                val key = slice.toStorage(it).asLong()
+                val prior = slice.map.put(key, group.donorFor(it))
+                step?.record(key, prior)
+            }
         }
         PaintHistory.commit(step)
 
         PaintIndexBuilder.refresh()
         PaintSession.markDirty()
-        ChunkRebuild.markRange(positions)
-        return positions.size
+        groups.forEach { ChunkRebuild.markRange(it.positions) }
+        return total
     }
 
     fun unpaintPositions(positions: Collection<BlockPos>): Int {

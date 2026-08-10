@@ -31,6 +31,10 @@ object ApSettings {
 
     /** Fallback palette used when the current room (if any) has no palette bound to it. */
     var activePalette: String = DEFAULT_PRESET
+
+    /** The area ruleset in hand. Global: a ruleset describes a look, not a place. */
+    var activeRuleset: String = DEFAULT_PRESET
+
     var brushRadius: Int = 1
     var paintSound: Boolean = true
     var showHud: Boolean = true
@@ -145,6 +149,10 @@ object ApSettings {
                 }
                 if (activePalette == from) activePalette = to
             }
+
+            PresetKind.RULESETS -> {
+                if (activeRuleset == from) activeRuleset = to
+            }
         }
         save()
     }
@@ -168,6 +176,7 @@ object ApSettings {
             defaultRoomPreset = root.get("defaultRoomPreset")?.asString ?: DEFAULT_PRESET
             defaultBossPreset = root.get("defaultBossPreset")?.asString ?: DEFAULT_PRESET
             activePalette = root.get("activePalette")?.asString ?: DEFAULT_PRESET
+            activeRuleset = root.get("activeRuleset")?.asString ?: DEFAULT_PRESET
             brushRadius = root.get("brushRadius")?.asInt ?: 1
             paintSound = root.get("paintSound")?.asBoolean ?: true
             showHud = root.get("showHud")?.asBoolean ?: true
@@ -221,6 +230,7 @@ object ApSettings {
             addProperty("defaultRoomPreset", defaultRoomPreset)
             addProperty("defaultBossPreset", defaultBossPreset)
             addProperty("activePalette", activePalette)
+            addProperty("activeRuleset", activeRuleset)
             addProperty("brushRadius", brushRadius)
             addProperty("paintSound", paintSound)
             addProperty("showHud", showHud)

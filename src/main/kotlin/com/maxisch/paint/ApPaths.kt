@@ -39,6 +39,10 @@ object ApPaths {
     val paletteConfig: Path
         get() = root.resolve("palette-config")
 
+    /** Area rulesets, one flat selector-to-target map per file. */
+    val rulesetConfig: Path
+        get() = root.resolve("ruleset-config")
+
     val settingsFile: Path
         get() = root.resolve("settings.json")
 
@@ -57,6 +61,7 @@ object ApPaths {
         blockBossConfig.createDirectories()
         blockTypeConfig.createDirectories()
         paletteConfig.createDirectories()
+        rulesetConfig.createDirectories()
         dataDir.createDirectories()
     }
 

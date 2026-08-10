@@ -58,6 +58,20 @@ class TypePreset(
 }
 
 /**
+ * A reusable set of area rules: which selector inside a box becomes which donor or palette. Like a
+ * [PalettePreset] this is only an authoring tool - an area apply reads it once and writes the
+ * concrete result into a [BlockPreset], so nothing here is consulted while rendering.
+ */
+class RulesetPreset(
+    val map: MutableMap<AreaSelector, AreaTarget> = LinkedHashMap(),
+) {
+    val size: Int
+        get() = map.size
+
+    fun isEmpty(): Boolean = map.isEmpty()
+}
+
+/**
  * A weighted bag of donor blocks. Only an authoring tool: an area apply draws from it once and
  * writes the concrete result into a [BlockPreset], so nothing here is consulted while rendering.
  */

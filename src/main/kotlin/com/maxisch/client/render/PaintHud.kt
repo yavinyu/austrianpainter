@@ -74,7 +74,7 @@ object PaintHud : HudElement {
         PaintArea.complete -> Component.translatable(
             "austrianpainter.hud.area",
             PaintArea.volume(),
-            sourceName(),
+            PaintArea.rules.size,
             PresetStores.palettes.activeName,
         )
 
@@ -82,10 +82,5 @@ object PaintHud : HudElement {
             Component.translatable("austrianpainter.hud.area_partial")
 
         else -> null
-    }
-
-    private fun sourceName(): Component = when {
-        PaintArea.sourceAll -> Component.translatable("austrianpainter.area.everything")
-        else -> PaintArea.source?.name ?: Component.translatable("austrianpainter.area.any_source")
     }
 }

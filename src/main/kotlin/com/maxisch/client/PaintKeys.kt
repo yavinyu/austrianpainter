@@ -86,7 +86,11 @@ object PaintKeys {
     /** Silent when there is nothing selected, so a stray press does not spam the chat. */
     private fun clearSelection(client: Minecraft) {
         if (client.level == null) return
-        if (PaintArea.corner1 == null && PaintArea.corner2 == null && !PaintArea.hasSource) return
+        if (PaintArea.corner1 == null && PaintArea.corner2 == null &&
+            PaintArea.selected.isEmpty() && PaintArea.rules.isEmpty()
+        ) {
+            return
+        }
 
         PaintArea.clearSelection()
         tell(client, Component.translatable("austrianpainter.area.selection_cleared"))

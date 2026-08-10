@@ -1,7 +1,7 @@
 package com.maxisch.client.gui
 
 import com.maxisch.client.KeyHints
-import com.maxisch.dungeon.RoomScanner
+import com.maxisch.dungeon.RoomTracker
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetStores
@@ -176,7 +176,9 @@ object ApSettingsScreen {
                                             Component.translatable("austrianpainter.settings.rescan.desc"),
                                         ),
                                     )
-                                    .action { _, _ -> RoomScanner.reset() }
+                                    // Re-arms the floor detection as well as the layout: a floor
+                                    // read wrong stays wrong for the whole server otherwise.
+                                    .action { _, _ -> RoomTracker.reset() }
                                     .build(),
                             )
                             .option(

@@ -223,6 +223,15 @@ object PaintCommands {
             ),
         )
 
+        // Says whether the sidebar is still being read, so "the floor went stale" and "the floor was
+        // never found" can be told apart from chat. Meaningless while forced, which already said so.
+        if (!DungeonLocation.forced) {
+            feedback(
+                source,
+                if (DungeonLocation.latched) "austrianpainter.room.latched" else "austrianpainter.room.detecting",
+            )
+        }
+
         val scope = PaintStorage.scope
             ?: return feedback(source, "austrianpainter.room.unresolved")
 

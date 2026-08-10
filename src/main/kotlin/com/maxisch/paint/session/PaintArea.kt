@@ -1,13 +1,14 @@
 package com.maxisch.paint.session
 
+import com.maxisch.paint.AreaSelector
+import com.maxisch.paint.AreaTarget
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
-import net.minecraft.world.level.block.Block
 import net.minecraft.world.phys.AABB
 
 /**
- * Transient, client-only box selection: two corners plus the source/donor pair the area screen is
- * working with. Kept apart from [PaintBrush] so replacing inside a box never disarms the brush.
+ * Transient, client-only box selection: two corners plus the rules the area screen is building for
+ * them. Kept apart from [PaintBrush] so replacing inside a box never disarms the brush.
  */
 object PaintArea {
 
@@ -17,23 +18,33 @@ object PaintArea {
     var corner1: BlockPos? = null
     var corner2: BlockPos? = null
 
-    /** Block type inside the area that a replace will target; ignored while [sourceAll] is set. */
-    var source: Block? = null
+    /**
+     * Rows the player has highlighted in the area list. Only an editing cursor: picking a donor
+     * assigns it to everything in here, and nothing is painted off this set directly.
+     */
+    val selected: MutableSet<AreaSelector> = LinkedHashSet()
 
-    /** Target every non-air block in the box rather than one type. */
-    var sourceAll: Boolean = false
+    /**
+     * What a replace actually applies - the rule per selector, built up by assigning donors to the
+     * selection. This is also exactly what gets saved as a ruleset.
+     */
+    val rules: MutableMap<AreaSelector, AreaTarget> = LinkedHashMap()
 
-    /** Donor for a plain one-block replace; the palette path ignores it. */
-    var donor: Block? = null
+    /** The last applied rules, so the same look can be dropped onto the next box in one click. */
+    var lastRules: Map<AreaSelector, AreaTarget> = emptyMap()
 
-    /** What the last apply touched, so a re-roll can redraw exactly that set. */
-    var lastApplied: List<BlockPos> = emptyList()
+    /**
+     * The palette-drawn positions of the last apply, keyed by the palette that drew them, so a
+     * re-roll can redraw exactly that set from the same bag. Donor rules are left out: re-rolling a
+     * fixed donor would only paint it again.
+     */
+    var lastPaletteApplied: Map<String, List<BlockPos>> = emptyMap()
 
     val complete: Boolean
         get() = corner1 != null && corner2 != null
 
-    val hasSource: Boolean
-        get() = sourceAll || source != null
+    val hasRules: Boolean
+        get() = rules.isNotEmpty()
 
     fun min(): BlockPos? {
         val a = corner1 ?: return null
@@ -92,19 +103,20 @@ object PaintArea {
     }
 
     /**
-     * Drops the box and what it was aimed at, but keeps the donor: picking a texture again after
-     * every selection would be tedious, and the donor is not part of the selection.
+     * Drops the box and the rules aimed at it. [lastRules] deliberately survives, so the same look
+     * can still be dropped onto the next box - re-authoring it after every selection would be
+     * tedious, and it is not part of the selection.
      */
     fun clearSelection() {
         clearCorners()
-        source = null
-        sourceAll = false
+        selected.clear()
+        rules.clear()
     }
 
     fun reset() {
         clearSelection()
-        donor = null
-        lastApplied = emptyList()
+        lastRules = emptyMap()
+        lastPaletteApplied = emptyMap()
     }
 
     /** Coordinates typed into the screen can sit outside the world; the walk must not. */
