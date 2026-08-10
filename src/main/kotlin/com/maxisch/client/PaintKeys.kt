@@ -55,7 +55,8 @@ object PaintKeys {
 
     /** True while the paint key is held; the scroll hook uses this to resize the brush. */
     @JvmStatic
-    fun isBrushKeyDown(): Boolean = ::brushPaint.isInitialized && brushPaint.isDown
+    fun isBrushKeyDown(): Boolean =
+        ApSettings.keybindsEnabled && ::brushPaint.isInitialized && brushPaint.isDown
 
     // Read by [KeyHints] so prose can name the live binding. Null before registration, which only
     // happens during client init - every reader runs long after that, but the guard is free.
@@ -77,6 +78,11 @@ object PaintKeys {
         )
 
     private fun tick(client: Minecraft) {
+        if (!ApSettings.keybindsEnabled) {
+            drainClicks()
+            return
+        }
+
         while (brushPaint.consumeClick()) stroke(client, paint = true)
         while (brushErase.consumeClick()) stroke(client, paint = false)
         while (cornerFirst.consumeClick()) markCorner(client, first = true)
@@ -98,6 +104,20 @@ object PaintKeys {
                 client.setScreenAndShow(PainterScreen.openAt(PainterScreen.TabId.AREA))
             }
         }
+    }
+
+    /** Swallows every queued click without acting on it, so re-enabling does not replay a held key. */
+    private fun drainClicks() {
+        while (brushPaint.consumeClick()) { /* no-op */ }
+        while (brushErase.consumeClick()) { /* no-op */ }
+        while (cornerFirst.consumeClick()) { /* no-op */ }
+        while (cornerSecond.consumeClick()) { /* no-op */ }
+        while (clearArea.consumeClick()) { /* no-op */ }
+        while (toggleOverlay.consumeClick()) { /* no-op */ }
+        while (undo.consumeClick()) { /* no-op */ }
+        while (redo.consumeClick()) { /* no-op */ }
+        while (openMenu.consumeClick()) { /* no-op */ }
+        while (openArea.consumeClick()) { /* no-op */ }
     }
 
     private fun flipOverlay(client: Minecraft) {

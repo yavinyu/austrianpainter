@@ -78,6 +78,8 @@
 
   "austrianpainter.sound.on": "Sounds: painted",
   "austrianpainter.sound.off": "Sounds: original",
+  "austrianpainter.keys.on": "Keybinds: on",
+  "austrianpainter.keys.off": "Keybinds: off",
 
   "austrianpainter.active_presets": "Blocks: %s   Types: %s",
   "austrianpainter.context.none": "Look at a block first",
@@ -113,6 +115,8 @@
   "austrianpainter.hud.no_donor": "Brush: no donor",
   "austrianpainter.hud.area": "Area: %s blocks  %s rules  palette %s",
   "austrianpainter.hud.area_partial": "Area: one corner set",
+  "austrianpainter.hud.looking_at": "Looking at: %s",
+  "austrianpainter.hud.looking_miss": "Looking at: nothing",
 
   "austrianpainter.area.corner_one": "Corner 1",
   "austrianpainter.area.corner_two": "Corner 2",
@@ -253,6 +257,10 @@
   "austrianpainter.settings.brush_radius.desc": "1 paints a single block. Larger sizes paint a cube of side 2r-1, up to %1$sx%1$sx%1$s.",
   "austrianpainter.settings.show_hints": "Show usage hints",
   "austrianpainter.settings.show_hints.desc": "Adds the brush-resize gesture to the HUD readout while the brush is on. Turn off once it is second nature.",
+  "austrianpainter.settings.show_looking_at": "Show looked-at block",
+  "austrianpainter.settings.show_looking_at.desc": "Adds the real block under your crosshair to the HUD readout - never the painted-over block.",
+  "austrianpainter.settings.keybinds_enabled": "Keybinds enabled",
+  "austrianpainter.settings.keybinds_enabled.desc": "Turns off every Austrian Painter keybind (paint, erase, corners, undo/redo, menu, overlay toggle). The bindings stay visible in Controls, they just do nothing while off.",
   "austrianpainter.settings.area": "Area selection",
   "austrianpainter.settings.area_outline": "Outline colour",
   "austrianpainter.settings.area_outline.desc": "Colour of the box edges drawn around the area selection.",
