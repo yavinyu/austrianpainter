@@ -213,12 +213,26 @@ Two deliberate limits:
 
 A Catacombs room prefab is placed at a different grid cell and a different rotation every run, so
 paint made inside one is stored **relative to the room's marker corner with its rotation taken
-out**, and re-projected when you walk back in.
+out**, and re-projected once the room has been scanned.
+
+Every scanned room is projected, not only the one you are standing in, so a painted room stays
+painted when you look into it from a doorway or the room next door — anywhere inside render
+distance. The room you are standing in is still the one edits go to: paint and erase always write to
+that room's slice.
 
 Rooms are identified by hashing a column of blocks through the tile centre and looking that hash up
 in a room list served by NoammAddons, and oriented by finding the single blue terracotta block
-Hypixel leaves on one roof corner. Boss rooms sit at fixed coordinates and need no scanning; they
-are keyed `B1`–`B7`, and master mode shares them with the normal floor.
+Hypixel leaves on one roof corner. A room only paints once it is oriented. Boss rooms sit at fixed
+coordinates and need no scanning; they are keyed `B1`–`B7`, and master mode shares them with the
+normal floor.
+
+Boss paint is the one layer that stays scoped to the room you are in: the preset is read off disk on
+entering the arena and its blocks only enter the index for as long as you are inside. A boss room is
+painted wall to wall, and the arena is nowhere near the rooms, so carrying it for the whole run would
+cost a lookup per block on every chunk bake in the dungeon and show nothing for it.
+
+A room bound to a different room preset than the loaded one still only paints once you walk in — one
+room preset file is loaded at a time, and entering the room is what swaps it.
 
 The **floor** is read off the sidebar once per server and then held for the rest of the run. Hypixel
 drops the `The Catacombs (M7)` line partway through some boss fights, and reading that as "left the
