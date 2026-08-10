@@ -1,6 +1,8 @@
 package com.maxisch.client.gui
 
 import com.maxisch.client.KeyHints
+import com.maxisch.client.render.BlockHighlight
+import com.maxisch.client.render.PaintedOverlay
 import com.maxisch.dungeon.RoomTracker
 import com.maxisch.paint.ApSettings
 import com.maxisch.paint.PaintStorage
@@ -137,6 +139,86 @@ object ApSettingsScreen {
                                         Color(ApSettings.DEFAULT_AREA_FILL, true),
                                         { Color(ApSettings.areaFillColor, true) },
                                         { ApSettings.areaFillColor = it.rgb },
+                                    )
+                                    .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Color>()
+                                    .name(Component.translatable("austrianpainter.settings.preview_outline"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable("austrianpainter.settings.preview_outline.desc"),
+                                        ),
+                                    )
+                                    .binding(
+                                        Color(ApSettings.DEFAULT_PREVIEW_OUTLINE, true),
+                                        { Color(ApSettings.areaPreviewColor, true) },
+                                        { ApSettings.areaPreviewColor = it.rgb },
+                                    )
+                                    .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                    .group(
+                        OptionGroup.createBuilder()
+                            .name(Component.translatable("austrianpainter.settings.overlay"))
+                            .description(
+                                OptionDescription.of(
+                                    Component.translatable("austrianpainter.settings.overlay.desc"),
+                                ),
+                            )
+                            .option(
+                                Option.createBuilder<Boolean>()
+                                    .name(Component.translatable("austrianpainter.settings.overlay_show"))
+                                    .binding(
+                                        false,
+                                        { ApSettings.showPaintedOverlay },
+                                        {
+                                            ApSettings.showPaintedOverlay = it
+                                            PaintedOverlay.invalidate()
+                                        },
+                                    )
+                                    .controller { TickBoxControllerBuilder.create(it) }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Int>()
+                                    .name(Component.translatable("austrianpainter.settings.overlay_radius"))
+                                    .description(
+                                        OptionDescription.of(
+                                            Component.translatable(
+                                                "austrianpainter.settings.overlay_radius.desc",
+                                                BlockHighlight.MAX_BOXES,
+                                            ),
+                                        ),
+                                    )
+                                    .binding(
+                                        16,
+                                        { ApSettings.paintedOverlayRadius },
+                                        {
+                                            ApSettings.paintedOverlayRadius = it
+                                            PaintedOverlay.invalidate()
+                                        },
+                                    )
+                                    .controller {
+                                        IntegerSliderControllerBuilder.create(it)
+                                            .range(ApSettings.MIN_OVERLAY_RADIUS, ApSettings.MAX_OVERLAY_RADIUS)
+                                            .step(2)
+                                    }
+                                    .build(),
+                            )
+                            .option(
+                                Option.createBuilder<Color>()
+                                    .name(Component.translatable("austrianpainter.settings.overlay_color"))
+                                    .binding(
+                                        Color(ApSettings.DEFAULT_PAINTED_OUTLINE, true),
+                                        { Color(ApSettings.paintedOverlayColor, true) },
+                                        {
+                                            ApSettings.paintedOverlayColor = it.rgb
+                                            PaintedOverlay.invalidate()
+                                        },
                                     )
                                     .controller { ColorControllerBuilder.create(it).allowAlpha(true) }
                                     .build(),

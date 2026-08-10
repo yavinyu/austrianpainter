@@ -1,7 +1,9 @@
 package com.maxisch.client
 
 import com.maxisch.client.render.AreaHighlight
+import com.maxisch.client.render.BlockHighlight
 import com.maxisch.client.render.PaintHud
+import com.maxisch.client.render.PaintedOverlay
 import com.maxisch.client.render.PaintModelPlugin
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.dungeon.RoomTracker
@@ -38,6 +40,8 @@ class AustrianpainterClient : ClientModInitializer {
         PaintCommands.register()
         PaintHud.register()
         AreaHighlight.register()
+        BlockHighlight.register()
+        PaintedOverlay.register()
 
         ClientPlayConnectionEvents.JOIN.register { _, _, client ->
             lastDimension = null
@@ -53,6 +57,7 @@ class AustrianpainterClient : ClientModInitializer {
             PaintSelection.reset()
             PaintArea.reset()
             RoomTracker.reset()
+            BlockHighlight.clear()
             PaintStorage.onLeaveWorld()
         }
 
@@ -86,7 +91,11 @@ class AustrianpainterClient : ClientModInitializer {
         ApSettings.seenIntro = true
         ApSettings.save()
         client.player?.sendSystemMessage(
-            Component.translatable("austrianpainter.intro", KeyHints.name(PaintKeys.openMenuKey)),
+            Component.translatable(
+                "austrianpainter.intro",
+                KeyHints.name(PaintKeys.openMenuKey),
+                KeyHints.name(PaintKeys.openAreaKey),
+            ),
         )
     }
 }

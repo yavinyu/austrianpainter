@@ -72,6 +72,12 @@ object PaintHistory {
     private val steps = ArrayDeque<Step>()
 
     /**
+     * Undone steps, inverted so replaying one redoes the change. Dropped by any *new* change: after
+     * the timeline forks there is no honest way to replay the branch that was abandoned.
+     */
+    private val redoSteps = ArrayDeque<Step>()
+
+    /**
      * True when the last recorded change was refused for being too large. The screens read it right
      * after an apply so they can say why the undo button went dead.
      */
@@ -82,8 +88,19 @@ object PaintHistory {
 
     val depth: Int get() = steps.size
 
+    val canRedo: Boolean get() = redoSteps.isNotEmpty()
+
+    val redoDepth: Int get() = redoSteps.size
+
+    /**
+     * The stack newest first, for the history screen. Every step already carries a label and a cost,
+     * so showing them needs no extra recording - only somewhere to put them.
+     */
+    fun stack(): List<Step> = steps.asReversed()
+
     fun clear() {
         steps.clear()
+        redoSteps.clear()
         overflowed = false
     }
 
@@ -99,7 +116,7 @@ object PaintHistory {
     internal fun beginPositions(label: Component, size: Int): Positions? {
         overflowed = false
         if (size > MAX_POSITIONS_PER_STEP) {
-            steps.clear()
+            clear()
             overflowed = true
             return null
         }
@@ -109,6 +126,8 @@ object PaintHistory {
     internal fun commit(step: Step?) {
         if (step == null || step.cost == 0) return
 
+        // A new change forks the timeline; whatever was undone can no longer be replayed onto it.
+        redoSteps.clear()
         steps.addLast(step)
         while (steps.size > MAX_DEPTH) steps.removeFirst()
         // Evicting from the bottom is safe: older steps are strictly further back in time, so
@@ -124,27 +143,38 @@ object PaintHistory {
     // ---------------------------------------------------------------- undo
 
     /** Reverses the newest step. Always returns something to show the player. */
-    fun undo(): Component {
-        val step = steps.removeLastOrNull() ?: return Component.translatable("austrianpainter.undo.none")
+    fun undo(): Component = apply(steps, redoSteps, "austrianpainter.undo")
+
+    /** Replays the newest undone step. Its own inverse goes back on the undo stack. */
+    fun redo(): Component = apply(redoSteps, steps, "austrianpainter.redo")
+
+    /**
+     * Undo and redo are the same operation in opposite directions: take the newest step off one
+     * stack, write it back, and push what it displaced onto the other.
+     */
+    private fun apply(from: ArrayDeque<Step>, onto: ArrayDeque<Step>, prefix: String): Component {
+        val step = from.removeLastOrNull() ?: return Component.translatable("$prefix.none")
         overflowed = false
 
         return when (step) {
             is Positions -> {
                 if (step.scopeKey != PaintSession.scope?.key) {
-                    // Should be impossible: every scope change clears the stack.
+                    // Should be impossible: every scope change clears both stacks.
                     LOGGER.warn(
-                        "Undo step was recorded in scope {} but the scope is now {}; skipping",
+                        "History step was recorded in scope {} but the scope is now {}; skipping",
                         step.scopeKey, PaintSession.scope?.key,
                     )
-                    return Component.translatable("austrianpainter.undo.none")
+                    return Component.translatable("$prefix.none")
                 }
-                val restored = PaintRules.restorePositions(step)
-                Component.translatable("austrianpainter.undo.positions", restored)
+                val inverse = PaintRules.restorePositions(step)
+                    ?: return Component.translatable("$prefix.none")
+                onto.addLast(inverse)
+                Component.translatable("$prefix.positions", step.cost)
             }
 
             is TypeRule -> {
-                PaintRules.restoreTypeRule(step)
-                Component.translatable("austrianpainter.undo.type", step.source.name)
+                onto.addLast(PaintRules.restoreTypeRule(step))
+                Component.translatable("$prefix.type", step.source.name)
             }
         }
     }

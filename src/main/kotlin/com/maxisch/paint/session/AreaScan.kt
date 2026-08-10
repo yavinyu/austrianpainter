@@ -116,16 +116,21 @@ object AreaScan {
     /**
      * One shared walk. The position handed to [visit] is a shared mutable cursor - copy it before
      * keeping it.
+     *
+     * The shape filter lives here rather than at the call sites so the counts the screen shows and
+     * the positions an apply paints can never disagree about what a shell or a sphere means.
      */
     private inline fun walk(level: Level, visit: (BlockPos, BlockState) -> Unit) {
         val min = PaintArea.min() ?: return
         val max = PaintArea.max() ?: return
         if (PaintArea.volume() > PaintArea.MAX_VOLUME) return
 
+        val shape = PaintArea.shape
         val cursor = BlockPos.MutableBlockPos()
         for (x in min.x..max.x) {
             for (y in min.y..max.y) {
                 for (z in min.z..max.z) {
+                    if (!shape.contains(x, y, z, min, max)) continue
                     cursor.set(x, y, z)
                     val state = level.getBlockState(cursor)
                     if (state.isAir) continue

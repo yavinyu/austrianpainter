@@ -1,6 +1,7 @@
 package com.maxisch.paint
 
 import com.maxisch.dungeon.RoomScope
+import com.maxisch.dungeon.RoomTracker
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
 import net.minecraft.world.level.block.Block
@@ -19,6 +20,9 @@ object PaintStorage {
 
     /** The dungeon room the player is standing in, if any. */
     val scope: RoomScope? get() = PaintSession.scope
+
+    /** Corners of that room, for "select this room"; see [RoomTracker.currentRoomCorners]. */
+    fun currentRoomCorners(): Pair<BlockPos, BlockPos>? = RoomTracker.currentRoomCorners()
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -79,9 +83,19 @@ object PaintStorage {
 
     val undoDepth: Int get() = PaintHistory.depth
 
+    /** The undo stack newest first; the history tab lists it. */
+    fun undoStack(): List<PaintHistory.Step> = PaintHistory.stack()
+
     /** True when the last change was too large to record; the caller should say so. */
     val undoOverflowed: Boolean get() = PaintHistory.overflowed
 
     /** Reverses the newest change. Always returns a message worth showing the player. */
     fun undo(): Component = PaintHistory.undo()
+
+    val canRedo: Boolean get() = PaintHistory.canRedo
+
+    val redoDepth: Int get() = PaintHistory.redoDepth
+
+    /** Replays the newest undone change. */
+    fun redo(): Component = PaintHistory.redo()
 }
