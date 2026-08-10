@@ -306,4 +306,10 @@ The dungeon scanner is a trimmed port of [NoammAddons](https://github.com/Noamm9
 `DungeonScanner`/`UniqueRoom` — no map rendering, no secrets, no score tracking, only what
 identifying and orienting a room needs. The Catacombs room list is served by NoammAddons.
 
+The F7 device column feature takes its idea and its coordinates from NoammAddons' `IHateDiorite`;
+`assets/austrianpainter/dungeon/device_columns.json` is a copy of that project's
+`iHateDioriteBlocks.json` (CC0). The mechanism is not a port: upstream rewrites the world with
+`setBlock` on a tick loop, whereas this evaluates a paint rule while the chunk bakes, so the colour
+follows a moving pillar without the mod ever touching a block.
+
 MIT licensed; see `LICENSE.txt`.
