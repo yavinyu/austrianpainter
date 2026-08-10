@@ -1,6 +1,7 @@
 package com.maxisch.client.gui.tab
 
 import com.maxisch.client.gui.BlockPickerScreen
+import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
@@ -78,10 +79,12 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
 
     private val clearButton = add(
         Button.builder(clearLabel()) {
-            val cleared = PaintStorage.positionsByDonor().values.sum()
-            PaintStorage.clearCurrentScope()
-            screen.status(Component.translatable("austrianpainter.status.cleared_scope", cleared))
-            refresh()
+            ConfirmAction.ask(screen, clearConfirmTitle(), clearConfirmMessage()) {
+                val cleared = PaintStorage.positionsByDonor().values.sum()
+                PaintStorage.clearCurrentScope()
+                screen.status(Component.translatable("austrianpainter.status.cleared_scope", cleared))
+                refresh()
+            }
         }.width(140).build(),
     )
 
@@ -230,6 +233,19 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
             Component.translatable("austrianpainter.clear_dimension")
         } else {
             Component.translatable("austrianpainter.clear_room", room)
+        }
+    }
+
+    private fun clearConfirmTitle(): Component = Component.translatable("austrianpainter.clear_scope.confirm.title")
+
+    /** Same room-vs-dimension distinction as [clearLabel], plus how many positions are on the line. */
+    private fun clearConfirmMessage(): Component {
+        val count = PaintStorage.positionsByDonor().values.sum()
+        val room = PaintStorage.scope?.key
+        return if (room == null) {
+            Component.translatable("austrianpainter.clear_dimension.confirm.message", count)
+        } else {
+            Component.translatable("austrianpainter.clear_room.confirm.message", count, room)
         }
     }
 
