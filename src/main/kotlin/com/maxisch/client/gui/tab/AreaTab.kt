@@ -2,6 +2,7 @@ package com.maxisch.client.gui.tab
 
 import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.BlockPickerScreen
+import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
@@ -367,8 +368,14 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     private fun clearPainted() {
         if (!PaintArea.complete || tooBig()) return
 
-        val cleared = PaintStorage.unpaintPositions(PaintArea.positions().toList())
-        screen.status(Component.translatable("austrianpainter.area.cleared", cleared))
+        ConfirmAction.ask(
+            screen,
+            Component.translatable("austrianpainter.area.clear_painted.confirm.title"),
+            Component.translatable("austrianpainter.area.clear_painted.confirm.message", PaintArea.volume()),
+        ) {
+            val cleared = PaintStorage.unpaintPositions(PaintArea.positions().toList())
+            screen.status(Component.translatable("austrianpainter.area.cleared", cleared))
+        }
     }
 
     // ------------------------------------------------------------------ labels
