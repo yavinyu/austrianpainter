@@ -7,6 +7,7 @@ import com.maxisch.paint.ApLog.LOGGER
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet
+import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
 
@@ -99,6 +100,42 @@ object DeviceColumns {
     }
 
     fun sourceFor(block: Block): DeviceSource? = DeviceSource.entries.firstOrNull { it.block == block }
+
+    /**
+     * The bounding box of every bundled column, bands included - null when there is no data to
+     * bound. Lets a rule change dirty just the arena's footprint instead of the whole loaded view;
+     * the bundled geometry never changes at runtime, so this is computed once and kept.
+     */
+    fun bounds(): Pair<BlockPos, BlockPos>? {
+        boundsCache?.let { return it }
+        if (!DeviceColumnData.loaded) return null
+
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+        var maxZ = Int.MIN_VALUE
+        var any = false
+
+        for (point in columns().map { it.base }) {
+            any = true
+            if (point.x < minX) minX = point.x
+            if (point.z < minZ) minZ = point.z
+            if (point.x > maxX) maxX = point.x
+            if (point.z > maxZ) maxZ = point.z
+            if (point.y < minY) minY = point.y
+            val top = point.y + DeviceColumnData.COLUMN_HEIGHT
+            if (top > maxY) maxY = top
+        }
+        if (!any) return null
+
+        val result = BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
+        boundsCache = result
+        return result
+    }
+
+    private var boundsCache: Pair<BlockPos, BlockPos>? = null
 
     /**
      * What a rule would paint at one position, resolved the same way the built layer resolves it.

@@ -68,6 +68,19 @@ the old one.
 
 ---
 
+## HUD
+
+A toggleable readout in the corner (**Settings → Show brush readout**, or `/paintbrush hud`):
+
+- **Room** — the dungeon room or boss currently in scope.
+- **Looking at** — the real block under your crosshair, never the painted one (**Settings → Show
+  looked-at block**).
+- **Brush** — armed donor and radius, plus the scroll-to-resize hint until you turn it off.
+- **Area** — corner/volume/rule count while a box is selected.
+- A red warning line if the painted-overlay outline hit its cap.
+
+---
+
 ## `/paintbrush`
 
 A client command. Nothing here reaches the server.
@@ -80,9 +93,13 @@ A client command. Nothing here reaches the server.
 | `radius <1-5>` | Brush size; a radius of `r` paints a cube of side `2r-1` |
 | `undo` / `redo` | Same as the undo and redo keys |
 | `room` | Dungeon diagnostics: known room cores, floor, scope key, origin, rotation, painted count |
+| `device [on\|off\|nearest\|probe]` | F7/M7 device-pillar colours: status, arm/disarm, nearest column to you, or probe the block you are looking at |
+| `zones [on\|off\|toggle]` | F7/M7 boss zone paint (pillars, s1-s4): status, or arm/disarm the whole layer |
 | `cull` / `cull reset` | Face-culling counters, for diagnosing a hole in a wall |
 | `dungeon <off\|F1-F7\|M1-M7> [boss]` | Pretend to be on that floor. Session only — see below |
 | `sound <true\|false>` | Painted sounds on or off |
+| `keys [on\|off\|toggle]` | Enable or disable every Austrian Painter keybind at once |
+| `hud [on\|off\|toggle]` | Show or hide the HUD readout |
 
 ---
 
@@ -216,6 +233,25 @@ The HUD shows the room in scope. `/paintbrush room` shows the rest. If a room is
 To author boss-room paint off Hypixel — on a test server that sends no sidebar — use
 `/paintbrush dungeon F7 boss`. It is session-only and never persisted, and the HUD turns orange
 while it is on so it cannot be mistaken for real detection.
+
+---
+
+## Boss room automation
+
+Two independent layers repaint fixed points inside the F7/M7 Sadan boss room without touching the
+world — both evaluated live at model-bake time, so they keep working while their blocks move, and
+neither needs a room scan (boss rooms sit at fixed coordinates). Both gate themselves to floor 7
+(Normal or Master Mode share the same room), are off by default, and dirty only their own fixed
+footprint when toggled rather than the whole loaded view.
+
+**Device columns** — repaints the phase-2 diorite/polished-diorite pillars the colour of the array
+(green/yellow/purple/red) they belong to, so you can tell them apart at a glance. Configure per
+(array, block) rule from **Settings → F7 device colours...**, or with `/paintbrush device`.
+
+**Boss zone paint** — repaints five fixed panels: the moving pillar blocks (coal block, player head)
+and four swap panels — `s1` sea lantern/obsidian, `s2` redstone lamp lit/unlit, `s3` sea
+lantern/blue terracotta, `s4` emerald block/blue terracotta. Each source block picks its own donor
+or palette independently from **Settings → F7 boss zone paint...**, or with `/paintbrush zones`.
 
 ---
 
