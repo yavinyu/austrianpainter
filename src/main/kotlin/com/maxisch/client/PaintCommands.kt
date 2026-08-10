@@ -5,6 +5,7 @@ import com.maxisch.dungeon.DeviceColumnData
 import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.BossZones
 import com.maxisch.paint.DeviceArray
 import com.maxisch.paint.DeviceColumns
 import com.maxisch.paint.DeviceSource
@@ -116,6 +117,25 @@ object PaintCommands {
                             ),
                     )
                     .then(
+                        ClientCommands.literal("zones")
+                            .executes { context -> zonesStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("on").executes { context ->
+                                    setZonesEnabled(context.source, true)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("off").executes { context ->
+                                    setZonesEnabled(context.source, false)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("toggle").executes { context ->
+                                    setZonesEnabled(context.source, !ApSettings.zonesEnabled)
+                                },
+                            ),
+                    )
+                    .then(
                         ClientCommands.literal("undo").executes { context ->
                             context.source.sendFeedback(PaintStorage.undo())
                             1
@@ -185,6 +205,25 @@ object PaintCommands {
                             .then(
                                 ClientCommands.literal("toggle").executes { context ->
                                     setKeybindsEnabled(context.source, !ApSettings.keybindsEnabled)
+                                },
+                            ),
+                    )
+                    .then(
+                        ClientCommands.literal("hud")
+                            .executes { context -> hudStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("on").executes { context ->
+                                    setHudEnabled(context.source, true)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("off").executes { context ->
+                                    setHudEnabled(context.source, false)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("toggle").executes { context ->
+                                    setHudEnabled(context.source, !ApSettings.showHud)
                                 },
                             ),
                     ),
@@ -417,6 +456,29 @@ object PaintCommands {
     private fun arrayName(array: DeviceArray): Component =
         Component.translatable("austrianpainter.device.array.${array.key}")
 
+    // ---------------------------------------------------------------- boss zones
+
+    private fun setZonesEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
+        ApSettings.zonesEnabled = enabled
+        ApSettings.save()
+        BossZones.invalidate()
+        PaintStorage.onDeviceScopeChanged()
+        return zonesStatus(source)
+    }
+
+    private fun zonesStatus(source: FabricClientCommandSource): Int {
+        feedback(
+            source,
+            "austrianpainter.zones.status",
+            Component.translatable(if (ApSettings.zonesEnabled) "austrianpainter.zones.on" else "austrianpainter.zones.off"),
+            BossZones.ruleCount(),
+        )
+        return feedback(
+            source,
+            if (BossZones.shouldApply()) "austrianpainter.zones.active" else "austrianpainter.zones.inactive",
+        )
+    }
+
     private fun setKeybindsEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
         ApSettings.keybindsEnabled = enabled
         ApSettings.save()
@@ -427,6 +489,19 @@ object PaintCommands {
         return feedback(
             source,
             if (ApSettings.keybindsEnabled) "austrianpainter.keys.on" else "austrianpainter.keys.off",
+        )
+    }
+
+    private fun setHudEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
+        ApSettings.showHud = enabled
+        ApSettings.save()
+        return hudStatus(source)
+    }
+
+    private fun hudStatus(source: FabricClientCommandSource): Int {
+        return feedback(
+            source,
+            if (ApSettings.showHud) "austrianpainter.hud.on" else "austrianpainter.hud.off",
         )
     }
 

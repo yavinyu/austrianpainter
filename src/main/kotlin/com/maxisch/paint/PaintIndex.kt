@@ -22,19 +22,21 @@ object PaintIndex {
         val byPos: Long2ObjectMap<Block>,
         val byBlock: Reference2ObjectMap<Block, Block>,
         val columns: ColumnRules,
+        val zones: ZoneRules,
     ) {
         val hasPositional: Boolean = !byPos.isEmpty()
         val hasTypes: Boolean = !byBlock.isEmpty()
         val hasColumns: Boolean = !columns.empty
+        val hasZones: Boolean = !zones.empty
 
         // Read by the renderer to decide whether paint-aware culling and the geometry-cache opt-out
         // are needed at all, so every layer has to count towards it - a column rule changes what a
         // block's neighbours may cull exactly like a positional one does.
-        val empty: Boolean = !hasPositional && !hasTypes && !hasColumns
+        val empty: Boolean = !hasPositional && !hasTypes && !hasColumns && !hasZones
     }
 
     private val EMPTY =
-        Snapshot(Long2ObjectOpenHashMap(), Reference2ObjectOpenHashMap(), ColumnRules.EMPTY)
+        Snapshot(Long2ObjectOpenHashMap(), Reference2ObjectOpenHashMap(), ColumnRules.EMPTY, ZoneRules.EMPTY)
 
     @Volatile
     private var snapshot: Snapshot = EMPTY
@@ -54,8 +56,9 @@ object PaintIndex {
         positions: Long2ObjectMap<Block>?,
         types: Map<Block, Block>,
         columns: ColumnRules = ColumnRules.EMPTY,
+        zones: ZoneRules = ZoneRules.EMPTY,
     ) {
-        if (positions.isNullOrEmptyMap() && types.isEmpty() && columns.empty) {
+        if (positions.isNullOrEmptyMap() && types.isEmpty() && columns.empty && zones.empty) {
             snapshot = EMPTY
             return
         }
@@ -63,7 +66,7 @@ object PaintIndex {
         val byPos = if (positions == null) Long2ObjectOpenHashMap() else Long2ObjectOpenHashMap(positions)
         val byBlock = Reference2ObjectOpenHashMap<Block, Block>(types.size)
         byBlock.putAll(types)
-        snapshot = Snapshot(byPos, byBlock, columns)
+        snapshot = Snapshot(byPos, byBlock, columns, zones)
     }
 
     private fun Long2ObjectMap<Block>?.isNullOrEmptyMap(): Boolean = this == null || this.isEmpty()
@@ -92,6 +95,13 @@ object PaintIndex {
                 val painted = column.paintAt(pos.x, pos.y, pos.z, block)
                 if (painted != null) return painted
             }
+        }
+
+        // Boss zones exist in a handful of fixed panels, so the source test is what keeps them free
+        // everywhere else, same reasoning as the column guard above.
+        if (pos != null && snap.hasZones && snap.zones.sources.contains(block)) {
+            val zoned = snap.zones.paintAt(pos.x, pos.y, pos.z, state)
+            if (zoned != null) return zoned
         }
 
         if (snap.hasTypes) return snap.byBlock[block]
