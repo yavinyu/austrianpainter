@@ -1,5 +1,6 @@
 package com.maxisch.client.gui.widget
 
+import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
 import net.minecraft.client.gui.narration.NarrationElementOutput
@@ -54,6 +55,12 @@ class RowListWidget<T>(
     var onRowClick: ((T) -> Unit)? = null
 
     /**
+     * Click with the row's index and the modifiers held, for lists that select more than one row.
+     * Takes precedence over [onRowClick] when set, so the single-select lists need no changes.
+     */
+    var onRowSelect: ((row: T, index: Int, ctrl: Boolean, shift: Boolean) -> Unit)? = null
+
+    /**
      * Wheel over a row. Returning true consumes the event so the list does not also scroll - that
      * is how the palette edits a weight under the cursor.
      */
@@ -78,18 +85,34 @@ class RowListWidget<T>(
         scroll = scroll.coerceIn(0, maxScroll)
     }
 
-    fun rowAt(mouseX: Double, mouseY: Double): T? {
+    /** Index into [rows], not into the visible window; null when the cursor is off a row. */
+    fun indexAt(mouseX: Double, mouseY: Double): Int? {
         if (mouseX < x || mouseX > x + width || mouseY < y || mouseY > y + height) return null
-        val index = ((mouseY - y) / rowHeight).toInt()
-        if (index !in 0 until visibleRows) return null
-        return rows.getOrNull(scroll + index)
+        val offset = ((mouseY - y) / rowHeight).toInt()
+        if (offset !in 0 until visibleRows) return null
+        return (scroll + offset).takeIf { it in rows.indices }
     }
+
+    fun rowAt(mouseX: Double, mouseY: Double): T? = indexAt(mouseX, mouseY)?.let { rows[it] }
 
     // ------------------------------------------------------------------ input
 
     override fun onClick(event: MouseButtonEvent, doubled: Boolean) {
-        val row = rowAt(event.x, event.y) ?: return
+        val index = indexAt(event.x, event.y) ?: return
+        val row = rows[index]
+
+        val select = onRowSelect
+        if (select != null) {
+            select(row, index, held(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL), held(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT))
+            return
+        }
         onRowClick?.invoke(row)
+    }
+
+    /** The click event carries no modifiers in 26.2, so ask the window directly. */
+    private fun held(left: Int, right: Int): Boolean {
+        val window = net.minecraft.client.Minecraft.getInstance().window
+        return InputConstants.isKeyDown(window, left) || InputConstants.isKeyDown(window, right)
     }
 
     override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {

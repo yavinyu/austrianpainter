@@ -29,11 +29,18 @@ object RoomTracker {
         PaintStorage.onScopeChanged(next)
     }
 
+    /**
+     * Drops everything detected and tells the paint side the scope is gone with it - clearing only
+     * the local field would leave [PaintStorage] pointing at a room on a server we have left.
+     */
     fun reset() {
         DungeonLocation.reset()
         RoomScanner.reset()
         wasInDungeon = false
+
+        val had = scope != null
         scope = null
+        if (had) PaintStorage.onScopeChanged(null)
     }
 
     private fun resolve(): RoomScope? {

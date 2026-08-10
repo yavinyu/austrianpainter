@@ -1,6 +1,6 @@
 package com.maxisch.paint
 
-/** The three preset folders. */
+/** One store per preset folder. */
 object PresetStores {
 
     val blocks = PresetStore(
@@ -43,6 +43,14 @@ object PresetStores {
         describe = { it.size },
     )
 
+    val rulesets = PresetStore(
+        folder = { ApPaths.rulesetConfig },
+        reader = PresetCodec::readRuleset,
+        writer = PresetCodec::writeRuleset,
+        empty = { RulesetPreset() },
+        describe = { it.size },
+    )
+
     /** The store a [PresetKind] names. */
     fun of(kind: PresetKind): PresetStore<*> = when (kind) {
         PresetKind.BLOCKS -> blocks
@@ -50,5 +58,6 @@ object PresetStores {
         PresetKind.BOSSES -> bosses
         PresetKind.TYPES -> types
         PresetKind.PALETTES -> palettes
+        PresetKind.RULESETS -> rulesets
     }
 }

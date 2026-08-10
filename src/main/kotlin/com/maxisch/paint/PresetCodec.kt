@@ -18,9 +18,9 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /**
- * Reads and writes both preset formats.
+ * Reads and writes every preset format.
  *
- * Both files are meant to be opened and edited by hand, so parsing is deliberately forgiving: a bad
+ * Every file is meant to be opened and edited by hand, so parsing is deliberately forgiving: a bad
  * coordinate, an unknown block or a junk key is logged and skipped rather than failing the load. The
  * alternative - refusing to load - would lose someone's whole palette over one typo.
  */
@@ -270,6 +270,100 @@ object PresetCodec {
         }
         path.createParentDirectories()
         path.writeText(ApJson.PRETTY.toJson(root) + "\n")
+    }
+
+    // ---------------------------------------------------------------- rulesets
+
+    /** Reserved keys for the two selectors that are not a block type. */
+    private const val KEY_EVERYTHING = "*all"
+    private const val KEY_UNPAINTED = "*unpainted"
+
+    /** A target value with this prefix names a palette rather than a donor block. */
+    private const val PALETTE_PREFIX = "palette:"
+
+    /**
+     * Splits a source key into the block and the paint state it is narrowed to. Block ids never
+     * contain it, so a key without one names the block whatever it currently looks like.
+     */
+    private const val PAINT_SEPARATOR = '@'
+    private const val PAINT_NONE = "none"
+
+    /**
+     * ```
+     * {
+     *   "minecraft:stone_bricks": "minecraft:oak_planks",
+     *   "minecraft:obsidian@none": "minecraft:white_wool",
+     *   "minecraft:obsidian@minecraft:white_wool": "palette:mossy"
+     * }
+     * ```
+     */
+    fun readRuleset(path: Path): RulesetPreset {
+        val preset = RulesetPreset()
+        val root = readRoot(path) ?: return preset
+
+        for ((key, value) in root.entrySet()) {
+            val selector = selector(key, path) ?: continue
+            val target = target(value.asString, path) ?: continue
+            preset.map[selector] = target
+        }
+        return preset
+    }
+
+    fun writeRuleset(path: Path, preset: RulesetPreset) {
+        val root = JsonObject()
+        for ((selector, target) in preset.map) {
+            root.addProperty(selectorKey(selector), targetValue(target))
+        }
+        path.createParentDirectories()
+        path.writeText(ApJson.PRETTY.toJson(root) + "\n")
+    }
+
+    private fun selector(key: String, path: Path): AreaSelector? = when (key) {
+        KEY_EVERYTHING -> AreaSelector.Everything
+        KEY_UNPAINTED -> AreaSelector.Unpainted
+        else -> {
+            val cut = key.lastIndexOf(PAINT_SEPARATOR)
+            val block = block(if (cut < 0) key else key.substring(0, cut), path)
+            val paint = paintFilter(if (cut < 0) null else key.substring(cut + 1), path)
+            if (block == null || paint == null) null else AreaSelector.Type(block, paint)
+        }
+    }
+
+    private fun paintFilter(raw: String?, path: Path): PaintFilter? = when (raw) {
+        null -> PaintFilter.AnyPaint
+        PAINT_NONE -> PaintFilter.Unpainted
+        else -> block(raw, path)?.let { PaintFilter.PaintedAs(it) }
+    }
+
+    private fun selectorKey(selector: AreaSelector): String = when (selector) {
+        AreaSelector.Everything -> KEY_EVERYTHING
+        AreaSelector.Unpainted -> KEY_UNPAINTED
+        is AreaSelector.Type -> {
+            val id = BuiltInRegistries.BLOCK.getKey(selector.block).toString()
+            when (val paint = selector.paint) {
+                PaintFilter.AnyPaint -> id
+                PaintFilter.Unpainted -> "$id$PAINT_SEPARATOR$PAINT_NONE"
+                is PaintFilter.PaintedAs ->
+                    "$id$PAINT_SEPARATOR${BuiltInRegistries.BLOCK.getKey(paint.donor)}"
+            }
+        }
+    }
+
+    private fun target(raw: String, path: Path): AreaTarget? {
+        if (raw.startsWith(PALETTE_PREFIX)) {
+            val name = ApPaths.sanitize(raw.removePrefix(PALETTE_PREFIX))
+            if (name.isEmpty()) {
+                LOGGER.warn("Skipping blank palette name '{}' in {}", raw, path)
+                return null
+            }
+            return AreaTarget.Palette(name)
+        }
+        return block(raw, path)?.let { AreaTarget.Donor(it) }
+    }
+
+    private fun targetValue(target: AreaTarget): String = when (target) {
+        is AreaTarget.Donor -> BuiltInRegistries.BLOCK.getKey(target.block).toString()
+        is AreaTarget.Palette -> PALETTE_PREFIX + target.name
     }
 
     // ---------------------------------------------------------------- shared

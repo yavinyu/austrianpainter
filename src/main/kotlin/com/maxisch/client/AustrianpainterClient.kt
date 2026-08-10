@@ -27,8 +27,9 @@ class AustrianpainterClient : ClientModInitializer {
     override fun onInitializeClient() {
         // Settings decide which presets a world binds to, so they have to be up before any join.
         ApSettings.load()
-        // Palettes are not world-bound, so the active one loads once here rather than on join.
+        // Palettes and rulesets are not world-bound, so they load once here rather than on join.
         PresetStores.palettes.load(ApSettings.activePalette)
+        PresetStores.rulesets.load(ApSettings.activeRuleset)
         // Reads the cached room list now and refreshes it in the background.
         RoomDataStore.start()
 
@@ -66,6 +67,9 @@ class AustrianpainterClient : ClientModInitializer {
             val dimension = client.level?.dimension()
             if (dimension != lastDimension) {
                 lastDimension = dimension
+                // On Hypixel a dimension change means a different server instance, so neither the
+                // detected floor nor the scanned layout can carry over.
+                RoomTracker.reset()
                 if (dimension != null) PaintStorage.refreshIndex()
             }
             RoomTracker.tick()

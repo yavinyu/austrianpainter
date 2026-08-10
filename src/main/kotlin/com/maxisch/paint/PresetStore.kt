@@ -44,6 +44,17 @@ class PresetStore<P : Any>(
     fun listWithActive(): List<String> =
         (list() + activeName).distinct().sorted()
 
+    /**
+     * The named preset without making it active - for the places a rule names a preset in passing,
+     * like an area ruleset pointing at a palette the player is not currently holding.
+     */
+    fun read(name: String): P {
+        if (name == activeName) return active
+        return runCatching { reader(path(name)) }
+            .onFailure { LOGGER.error("Could not read preset '{}'", name, it) }
+            .getOrElse { empty() }
+    }
+
     fun entryCount(name: String): Int =
         if (name == activeName) describe(active) else runCatching { describe(reader(path(name))) }.getOrElse { 0 }
 

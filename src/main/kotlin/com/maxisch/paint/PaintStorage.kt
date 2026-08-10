@@ -46,6 +46,8 @@ object PaintStorage {
 
     fun activatePalette(name: String) = PaintSession.activatePalette(name)
 
+    fun activateRuleset(name: String) = PaintSession.activateRuleset(name)
+
     // ---------------------------------------------------------------- rules
 
     fun typeRules(): Map<Block, Block> = PaintRules.typeRules()
@@ -61,6 +63,9 @@ object PaintStorage {
 
     fun paintPositions(positions: Collection<BlockPos>, donorFor: (BlockPos) -> Block): Int =
         PaintRules.paintPositions(positions, donorFor)
+
+    /** Several donor groups as one undoable change; see [PaintRules.paintGroups]. */
+    fun paintGroups(groups: List<PaintRules.Group>): Int = PaintRules.paintGroups(groups)
 
     fun unpaintPositions(positions: Collection<BlockPos>): Int = PaintRules.unpaintPositions(positions)
 

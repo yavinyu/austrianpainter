@@ -60,14 +60,11 @@ class BlockPickerScreen(
     }
 
     private fun applyFilter(query: String) {
-        val trimmed = query.trim().lowercase()
-        filtered = if (trimmed.isEmpty()) {
+        val normalized = BlockSearch.normalize(query)
+        filtered = if (normalized.isEmpty()) {
             ALL_BLOCKS
         } else {
-            ALL_BLOCKS.filter { block ->
-                BuiltInRegistries.BLOCK.getKey(block).toString().contains(trimmed) ||
-                    block.name.string.lowercase().contains(trimmed)
-            }
+            ALL_BLOCKS.filter { BlockSearch.matches(it, normalized) }
         }
         scrollRow = 0
     }

@@ -98,12 +98,40 @@ everywhere). Both read whatever you were looking at when the menu opened — the
 soon as a screen is up, so it is captured once on open.
 
 **Area** — set two corners, with the keys, the X/Y/Z boxes, or the "Use looked-at" buttons. The list
-shows what is actually inside the box, most common first, plus an "Everything" row. Click one to
-choose what gets replaced, then either:
+shows what is actually inside the box, most common first, plus an **Everything** row and an
+**Unchanged** row — everything nothing has painted yet.
 
-- **Replace** — one donor over the whole selection, or
-- **Replace random** — a weighted draw from the active palette, one roll per position.
-- **Re-roll** redraws the last apply over the same positions with a fresh roll.
+Each block type is listed once *per paint state*, so what you already did to it is visible and
+selectable on its own:
+
+```
+Everything             - 1204 blocks
+Unchanged              -  802 blocks
+obsidian               -  402 blocks
+obsidian > white_wool  -  312 blocks
+```
+
+The rows are disjoint: `obsidian` is the obsidian nothing has touched, `obsidian > white_wool` is
+the obsidian already painted. Ctrl-click both to hit all of it. The search box filters the list, and
+matches the donor as well as the source, so searching `wool` finds the second row.
+
+Select rows to work on: click to select, **Ctrl-click** to add one, **Shift-click** for a range, or
+**Select all** for everything the filter left. Then give the selection a target:
+
+- **Pick donor** — one block, or
+- **Use palette** — a weighted draw from the active palette, one roll per position.
+
+Each selected row keeps the target you gave it, so stone bricks can become oak planks while
+cobblestone becomes spruce in the same pass. **Replace** applies every rule at once as a *single*
+undoable change; **Replace random** is the shortcut for "palette, then apply", and **Re-roll**
+redraws the palette-drawn part of the last apply with a fresh roll.
+
+The rules are a *ruleset*. **Reapply last** drops the previous apply's rules onto a newly selected
+box, and **Save ruleset** / **Load ruleset** keep them in a named preset for good (create and switch
+those on the Presets tab).
+
+To undo paint rather than change it, **Unpaint selected** strips the paint off whatever the
+highlighted rows match, and **Unpaint area** strips it off the whole box. Both ask first.
 
 The selection is drawn in-world as a coloured box (colours are configurable). The ceiling is
 **2,000,000 blocks**; past that everything is refused rather than stalling the client.
@@ -111,7 +139,7 @@ The selection is drawn in-world as a coloured box (colours are configurable). Th
 **Palette** — add and remove donors, and scroll a row to change its weight (hold shift for ±10).
 Weights are relative, so each row shows the share it works out to.
 
-**Presets** — one folder manager for all three kinds. New, Duplicate, Rename, Delete, Activate.
+**Presets** — one folder manager for every kind. New, Duplicate, Rename, Delete, Activate.
 Every refusal says why rather than doing nothing.
 
 Results appear on the status line above the footer, not in chat — chat is unreadable while a screen
@@ -147,6 +175,13 @@ in a room list served by NoammAddons, and oriented by finding the single blue te
 Hypixel leaves on one roof corner. Boss rooms sit at fixed coordinates and need no scanning; they
 are keyed `B1`–`B7`, and master mode shares them with the normal floor.
 
+The **floor** is read off the sidebar once per server and then held for the rest of the run. Hypixel
+drops the `The Catacombs (M7)` line partway through some boss fights, and reading that as "left the
+dungeon" used to unload the boss paint mid-fight and throw the scanned layout away with it. Only a
+join, a dimension change, leaving Skyblock, or **Settings → Dungeons → Re-scan dungeon** re-arms the
+detection — nothing the sidebar prints does. Whether the floor is still being read or already held
+shows in `/paintbrush room`.
+
 The HUD shows the room in scope. `/paintbrush room` shows the rest. If a room is not recognised, use
 **Settings → Dungeons → Re-scan dungeon**.
 
@@ -166,9 +201,16 @@ config/ap/
   block-config/<name>.json       positional paint: { "dimensions": {...}, "rooms": {...} }
   block-type-config/<name>.json  flat  { "minecraft:oak_stairs": "minecraft:diamond_block" }
   palette-config/<name>.json     flat  { "minecraft:stone": 70 }
+  ruleset-config/<name>.json     flat  { "minecraft:stone_bricks": "minecraft:oak_planks" }
   data/rooms.json                Catacombs room list, fetched from api.noamm.org and cached
   data/version.txt
 ```
+
+A ruleset key is a block id, or `*all` / `*unpainted` for the two rows that are not a block type. An
+`@` narrows a block id to one paint state: `minecraft:obsidian@none` is obsidian nothing has
+painted, `minecraft:obsidian@minecraft:white_wool` is obsidian already painted as wool, and a bare
+`minecraft:obsidian` matches it however it currently looks. A value prefixed `palette:` names a
+palette instead of a donor block.
 
 All of it is meant to be opened and edited by hand, so parsing is forgiving: a bad coordinate, an
 unknown block or a junk key is logged and skipped rather than failing the load. Positional presets

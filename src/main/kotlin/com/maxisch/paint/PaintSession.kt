@@ -214,6 +214,16 @@ object PaintSession {
         }
     }
 
+    /**
+     * Like a palette, a ruleset only feeds future applies, so nothing already painted changes.
+     * Unlike a palette it never binds to a room: a ruleset describes a look, not a place.
+     */
+    fun activateRuleset(name: String) {
+        PresetStores.rulesets.load(name)
+        ApSettings.activeRuleset = PresetStores.rulesets.activeName
+        ApSettings.save()
+    }
+
     // ---------------------------------------------------------------- world identity
 
     internal fun currentDimension(): ResourceKey<Level>? = Minecraft.getInstance().level?.dimension()

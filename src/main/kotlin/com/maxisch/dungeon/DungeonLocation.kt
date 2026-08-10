@@ -1,21 +1,36 @@
 package com.maxisch.dungeon
 
 import net.minecraft.client.Minecraft
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.scores.DisplaySlot
+import net.minecraft.world.scores.Scoreboard
 
 /**
  * Where on Hypixel the player is, as far as the paint scope cares: which Catacombs floor, and
  * whether they are standing in that floor's boss room.
  *
- * Everything is read off the client's own scoreboard once a tick instead of intercepting packets,
- * so this needs no mixins. Hypixel still puts the sidebar text in each team's prefix/suffix, but a
- * score entry's owner name does not reliably correlate back to its team, so every team on the
- * scoreboard is scanned directly for its text instead of looking teams up per sidebar entry.
+ * Everything is read off the client's own scoreboard instead of intercepting packets, so this needs
+ * no mixins. Hypixel still puts the sidebar text in each team's prefix/suffix, but a score entry's
+ * owner name does not reliably correlate back to its team, so every team on the scoreboard is
+ * scanned directly for its text instead of looking teams up per sidebar entry.
+ *
+ * The floor is read **once per server** and then latched. Hypixel drops the "The Catacombs (M7)"
+ * line from the sidebar partway through some boss fights, and taking that as "left the dungeon"
+ * unloaded the boss preset mid-fight and threw away the scanned layout with it. A floor cannot
+ * change without a new server instance anyway, so only a join, a dimension change or actually
+ * leaving Skyblock clears it - never the sidebar text. The boss test stays per tick because it is
+ * positional and has to flip when the player walks in.
  */
 object DungeonLocation {
 
     private const val SIDEBAR_OBJECTIVE = "SBScoreboard"
+
+    /** How often the sidebar is scanned for the floor while it is still unknown. */
+    private const val POLL_INTERVAL_MS = 1_000L
+
+    /** How long Hypixel's sidebar may be gone before the latch is taken as "left Skyblock". */
+    private const val SKYBLOCK_GRACE_MS = 5_000L
 
     var inSkyblock: Boolean = false
         private set
@@ -48,6 +63,13 @@ object DungeonLocation {
     val forced: Boolean
         get() = forcedFloor != null
 
+    /** The floor has been read off the sidebar and is being held for the rest of this server. */
+    var latched: Boolean = false
+        private set
+
+    private var lastSkyblockMs = 0L
+    private var lastPollMs = 0L
+
     fun force(floor: String?, boss: Boolean = false) {
         forcedFloor = floor
         forcedBoss = boss
@@ -65,30 +87,37 @@ object DungeonLocation {
             inDungeon = true
             floor = forcedName
             floorNumber = forcedName.lastOrNull()?.digitToIntOrNull() ?: 0
-            val number = floorNumber ?: 0
-            inBoss = forcedBoss || (number in 1..7 && BOSS_BOUNDS[number - 1].contains(player.position()))
+            updateBoss(player)
+            if (forcedBoss) inBoss = true
             return
         }
 
-        val scoreboard = level.scoreboard
-        val sidebar = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)
-        if (sidebar == null) return reset()
+        // One map lookup and a string compare, cheap enough to do every tick. The per-team scan
+        // below is the expensive part, and that is what the latch skips.
+        val sidebar = level.scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR)
+        val skyblock = sidebar != null && sidebar.name == SIDEBAR_OBJECTIVE
+        val now = System.currentTimeMillis()
+        if (skyblock) lastSkyblockMs = now
 
-        inSkyblock = sidebar.name == SIDEBAR_OBJECTIVE
-        if (!inSkyblock) return reset()
+        inSkyblock = skyblock
 
-        // The floor line's score entry does not reliably correlate back to its team by owner name,
-        // so every team is scanned directly for its text instead - same approach NoammAddons uses.
-        // The floor only ever appears once, and only while actually inside the dungeon - the queue
-        // line mentions The Catacombs too, hence the explicit exclusion.
-        var found: String? = null
-        for (team in scoreboard.playerTeams) {
-            val text = clean(team.playerPrefix.string + team.playerSuffix.string)
-            if (!text.contains("The Catacombs (") || text.contains("Queue")) continue
-            found = text.substringAfter("(").substringBefore(")")
-            break
+        if (latched) {
+            // The sidebar text is deliberately ignored for the rest of the run; only losing
+            // Skyblock's board altogether, for long enough that it cannot be a hiccup, counts as
+            // having left.
+            if (!skyblock && now - lastSkyblockMs > SKYBLOCK_GRACE_MS) return reset()
+            updateBoss(player)
+            return
         }
 
+        if (!skyblock) return reset()
+
+        if (now - lastPollMs < POLL_INTERVAL_MS) return
+        lastPollMs = now
+
+        // Outside a dungeon this simply keeps finding nothing - the hub and the queue are the
+        // normal case for it, and the poll interval is what keeps that affordable.
+        val found = findFloor(level.scoreboard)
         if (found == null) {
             inDungeon = false
             floor = null
@@ -97,10 +126,29 @@ object DungeonLocation {
             return
         }
 
+        latched = true
         inDungeon = true
         floor = found
         floorNumber = found.lastOrNull()?.digitToIntOrNull() ?: 0
+        updateBoss(player)
+    }
 
+    /**
+     * The floor line's score entry does not reliably correlate back to its team by owner name, so
+     * every team is scanned directly for its text instead - same approach NoammAddons uses. The
+     * floor only ever appears once, and only while actually inside the dungeon - the queue line
+     * mentions The Catacombs too, hence the explicit exclusion.
+     */
+    private fun findFloor(scoreboard: Scoreboard): String? {
+        for (team in scoreboard.playerTeams) {
+            val text = clean(team.playerPrefix.string + team.playerSuffix.string)
+            if (!text.contains("The Catacombs (") || text.contains("Queue")) continue
+            return text.substringAfter("(").substringBefore(")")
+        }
+        return null
+    }
+
+    private fun updateBoss(player: Player) {
         val number = floorNumber ?: 0
         inBoss = number in 1..7 && BOSS_BOUNDS[number - 1].contains(player.position())
     }
@@ -128,6 +176,9 @@ object DungeonLocation {
         floor = null
         floorNumber = null
         inBoss = false
+        // Re-arms the sidebar scan. The timestamps are left alone; both are re-stamped by the next
+        // read that finds Skyblock's board.
+        latched = false
     }
 
     /** Strips section-sign formatting and the invisible padding Hypixel pads sidebar lines with. */
