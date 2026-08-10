@@ -36,6 +36,16 @@ class PresetStore<P : Any>(
     var active: P = empty()
         private set
 
+    /**
+     * False until [load] has run once. A store that has never loaded holds an empty preset under the
+     * name it would write to, so saving it would overwrite a perfectly good file with nothing - see
+     * [saveActive] - and reading it would report no paint where the file has plenty. A caller that
+     * only loads on demand has to check this as well as the name; comparing names alone would skip
+     * the one load that matters, the first.
+     */
+    var isLoaded: Boolean = false
+        private set
+
     fun path(name: String): Path = folder().resolve("${ApPaths.sanitize(name)}.json")
 
     fun exists(name: String): Boolean = Files.exists(path(name))
@@ -101,10 +111,21 @@ class PresetStore<P : Any>(
         }
 
         activeName = target
+        isLoaded = true
         if (file.notExists()) saveActive()
     }
 
+    /**
+     * Refuses to write a store nothing has loaded: the empty preset it starts with would land on the
+     * default preset's file and take whatever was in it with it. This is a normal state, not an
+     * error - the boss store is only loaded on walking into an arena, and [PaintSession.flush]
+     * writes every kind whether or not this run ever got there.
+     */
     fun saveActive() {
+        if (!isLoaded) {
+            LOGGER.debug("Skipping save of preset '{}': it was never loaded", activeName)
+            return
+        }
         cached.clear()
         runCatching {
             ApPaths.ensureDirectories()
@@ -115,7 +136,15 @@ class PresetStore<P : Any>(
     // ---------------------------------------------------------------- sharing
 
     /** The active preset as text, ready for the clipboard. */
-    fun exportActive(): String = render(active)
+    /**
+     * Reads the file first if nothing has loaded it: the boss store sits untouched until an arena is
+     * entered, and exporting its empty starting preset under the active name would put an empty
+     * clipboard where the file has paint.
+     */
+    fun exportActive(): String {
+        if (!isLoaded) load(activeName)
+        return render(active)
+    }
 
     /**
      * Creates a new preset called [name] from [text]. Deliberately never overwrites: a paste is the
