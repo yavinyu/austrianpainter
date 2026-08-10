@@ -21,6 +21,15 @@ object RoomTracker {
     /** Same edge-detection, for [BossZones.shouldApply]. */
     private var zoneActive = false
 
+    /** Edge-detects the floor, which decides which boss preset and room presets are loaded. */
+    private var lastFloor: Int? = null
+
+    /** Last [RoomScanner.layoutVersion] the paint side was told about. */
+    private var lastLayout = RoomScanner.layoutVersion
+
+    /** Edge-detects [ApSettings.dungeonRoomScope], which shows or hides every room's paint at once. */
+    private var roomScopeActive = ApSettings.dungeonRoomScope
+
     fun tick() {
         DungeonLocation.tick()
 
@@ -29,6 +38,18 @@ object RoomTracker {
         } else if (wasInDungeon) {
             wasInDungeon = false
             RoomScanner.reset()
+        }
+
+        val roomScope = ApSettings.dungeonRoomScope
+        if (roomScope != roomScopeActive) {
+            roomScopeActive = roomScope
+            PaintStorage.onRoomVisibilityChanged()
+        }
+
+        val floor = DungeonLocation.floorNumber.takeIf { DungeonLocation.inDungeon }
+        if (floor != lastFloor) {
+            lastFloor = floor
+            PaintStorage.onDungeonFloorChanged(floor)
         }
 
         val device = DeviceColumns.shouldApply()
@@ -44,9 +65,17 @@ object RoomTracker {
         }
 
         val next = resolve()
-        if (next == scope) return
-        scope = next
-        PaintStorage.onScopeChanged(next)
+        if (next != scope) {
+            scope = next
+            PaintStorage.onScopeChanged(next)
+        }
+
+        // After resolve(), which is what drives the scan: a room that just found its marker can be
+        // projected into the index now, and nothing else would notice it appearing.
+        if (RoomScanner.layoutVersion != lastLayout) {
+            lastLayout = RoomScanner.layoutVersion
+            PaintStorage.onRoomLayoutChanged()
+        }
     }
 
     /**
@@ -60,6 +89,9 @@ object RoomTracker {
         // Re-arms the edge, so joining a fresh instance inside the arena still fires it.
         deviceActive = false
         zoneActive = false
+        lastFloor = null
+        // Deliberately not re-synced: RoomScanner.reset() has bumped the version, so the next tick
+        // fires the layout hook and drops projections belonging to the run that just ended.
 
         val had = scope != null
         scope = null
@@ -96,8 +128,6 @@ object RoomTracker {
 
         val player = Minecraft.getInstance().player ?: return null
         val room = RoomScanner.roomAt(player.position()) ?: return null
-        val origin = room.clayPos ?: return null
-        val rotation = room.rotation ?: return null
-        return RoomScope(room.name, origin, 360 - rotation, isBoss = false)
+        return RoomScanner.scopeFor(room)
     }
 }

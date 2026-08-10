@@ -1,5 +1,6 @@
 package com.maxisch.paint
 
+import com.maxisch.dungeon.RoomScanner
 import com.maxisch.dungeon.RoomScope
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -43,6 +44,11 @@ object PaintSession {
 
         PresetStores.blocks.load(ApSettings.blockPresetFor(key))
         PresetStores.types.load(ApSettings.typePresetFor(key))
+        // Unconditionally, even though a room may swap it again later: every scanned room is
+        // projected into the index from the moment it orients, so the preset behind them has to be
+        // in memory before the player walks anywhere. Bosses are the opposite - see [onScopeChanged].
+        PresetStores.rooms.load(ApSettings.defaultRoomPreset)
+        PaintIndexBuilder.invalidateRooms()
         PaintIndexBuilder.refresh()
     }
 
@@ -51,6 +57,7 @@ object PaintSession {
         worldKey = null
         scope = null
         PaintHistory.clear()
+        PaintIndexBuilder.invalidateRooms()
         PaintIndex.clear()
     }
 
@@ -76,9 +83,13 @@ object PaintSession {
         val roomChanged = when {
             next == null -> false
             next.isBoss -> {
+                // Walking into the arena is the only thing that reads the boss preset off disk, so
+                // the store can still be untouched here with the wanted name already on it - the
+                // name comparison alone would skip the one load that matters.
                 val wantedBoss = ApSettings.bossPresetFor(next.key)
-                (wantedBoss != PresetStores.bosses.activeName).also { changed ->
-                    if (changed) PresetStores.bosses.load(wantedBoss)
+                val store = PresetStores.bosses
+                (!store.isLoaded || wantedBoss != store.activeName).also { changed ->
+                    if (changed) store.load(wantedBoss)
                 }
             }
             else -> {
@@ -93,12 +104,67 @@ object PaintSession {
         val wantedPalette = next?.key?.let { ApSettings.roomPalettePresetFor(it) } ?: ApSettings.activePalette
         if (wantedPalette != PresetStores.palettes.activeName) PresetStores.palettes.load(wantedPalette)
 
+        if (presetChanged || roomChanged) PaintIndexBuilder.invalidateRooms()
+        // The room being entered is the only one whose paint can change from here, and its cached
+        // projection was taken before the player walked in.
+        next?.takeUnless { it.isBoss }?.let { PaintIndexBuilder.invalidateRoom(it.key) }
         PaintIndexBuilder.refresh()
 
-        // Room borders are crossed constantly; rebuilding every loaded chunk each time would
-        // stutter for nothing when neither room is painted and the rules did not change.
-        if (presetChanged || roomChanged || hasRoomPaint(previous) || hasRoomPaint(next)) {
-            ChunkRebuild.markAll()
+        // Every dungeon room's paint is in the index the whole time now, so crossing a border
+        // changes nothing on screen by itself. A preset swap repaints every room at once, and the
+        // boss layer is the one thing that still comes and goes with the scope - both need the view
+        // re-baked, and walking into the arena happens once a run.
+        val bossChanged = previous?.isBoss == true || next?.isBoss == true
+        if (presetChanged || roomChanged || bossChanged) ChunkRebuild.markAll()
+    }
+
+    /**
+     * The dungeon floor was just identified, or a new run started. The room preset is otherwise only
+     * loaded on entering a room, and that layer now renders from outside the room it belongs to, so
+     * it has to be in memory before the player walks anywhere. The boss preset stays on disk until
+     * the arena is entered; nothing draws it before then.
+     */
+    fun onDungeonFloorChanged(floor: Int?) {
+        if (floor == null) return onRoomVisibilityChanged()
+
+        flush()
+        PaintIndexBuilder.invalidateRooms()
+        // While a room is in scope onScopeChanged owns which room preset is loaded; overriding it
+        // with the global default here would drop that room's own binding.
+        if (scope == null) {
+            val wantedRoom = ApSettings.defaultRoomPreset
+            if (wantedRoom != PresetStores.rooms.activeName) PresetStores.rooms.load(wantedRoom)
+        }
+
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
+
+    /**
+     * Every room's paint just appeared or disappeared at once - the room-scope setting was flipped,
+     * or the run ended - so the whole loaded view has to be re-baked.
+     */
+    fun onRoomVisibilityChanged() {
+        PaintIndexBuilder.invalidateRooms()
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
+
+    /**
+     * A room finished scanning and knows where it sits. Only that room's own footprint can have
+     * changed on screen, and rooms orient in bursts as chunks load, so rebuilding the whole view
+     * per room would stutter through the first walk of every dungeon.
+     */
+    fun onRoomLayoutChanged() {
+        PaintIndexBuilder.invalidateRooms()
+        PaintIndexBuilder.refresh()
+
+        val floor = Minecraft.getInstance().level?.minY ?: return
+        val preset = PresetStores.rooms.active
+        for (room in RoomScanner.drainNewlyOriented()) {
+            if (preset.positionsFor(room.name)?.isEmpty() != false) continue
+            val (min, max) = room.footprint(floor) ?: continue
+            ChunkRebuild.markRange(listOf(min, max))
         }
     }
 
@@ -117,12 +183,6 @@ object PaintSession {
         DeviceColumns.bounds()?.let { (min, max) -> corners.add(min); corners.add(max) }
         BossZones.bounds().let { (min, max) -> corners.add(min); corners.add(max) }
         ChunkRebuild.markRange(corners)
-    }
-
-    private fun hasRoomPaint(room: RoomScope?): Boolean {
-        if (room == null) return false
-        val store = if (room.isBoss) PresetStores.bosses else PresetStores.rooms
-        return store.active.positionsFor(room.key)?.isEmpty() == false
     }
 
     // ---------------------------------------------------------------- debounced writes
@@ -177,6 +237,7 @@ object PaintSession {
             ApSettings.save()
         }
 
+        PaintIndexBuilder.invalidateRooms()
         PaintIndexBuilder.refresh()
         ChunkRebuild.markAll()
     }
@@ -195,6 +256,7 @@ object PaintSession {
             ApSettings.save()
         }
 
+        PaintIndexBuilder.invalidateRooms()
         PaintIndexBuilder.refresh()
         ChunkRebuild.markAll()
     }
