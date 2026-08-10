@@ -28,6 +28,9 @@ object ApSettings {
     const val MIN_OVERLAY_RADIUS = 4
     const val MAX_OVERLAY_RADIUS = 48
 
+    /** Written for a device rule the player turned off, so "off" survives a round trip. */
+    private const val DEVICE_RULE_OFF = "none"
+
     var defaultBlockPreset: String = DEFAULT_PRESET
     var defaultTypePreset: String = DEFAULT_PRESET
 
@@ -87,6 +90,40 @@ object ApSettings {
 
     /** Colour of the "this is what Replace would touch" outline in the area tab. */
     var areaPreviewColor: Int = DEFAULT_PREVIEW_OUTLINE
+
+    // ---------------------------------------------------------------- device columns
+
+    /** Repaints the F7 phase-2 device pillars; see [DeviceColumns]. */
+    var deviceEnabled: Boolean = false
+
+    /** One palette roll per column, so a whole pillar is one colour. Off rolls per block. */
+    var deviceSeedPerColumn: Boolean = true
+
+    /**
+     * Keyed `"<array>.<source>"`. A key that is present with a null value is a rule the player
+     * turned off, which is not the same as one that was never written - an absent key falls back
+     * to the array's own colour so a settings file from before the feature existed picks it up.
+     */
+    private val deviceRules = LinkedHashMap<String, AreaTarget?>()
+
+    private fun deviceKey(array: DeviceArray, source: DeviceSource) = "${array.key}.${source.key}"
+
+    fun deviceRule(array: DeviceArray, source: DeviceSource): AreaTarget? {
+        val key = deviceKey(array, source)
+        if (deviceRules.containsKey(key)) return deviceRules[key]
+        return AreaTarget.Donor(array.defaultDonor)
+    }
+
+    fun setDeviceRule(array: DeviceArray, source: DeviceSource, target: AreaTarget?) {
+        deviceRules[deviceKey(array, source)] = target
+        save()
+    }
+
+    /** Back to each array's own glass, by forgetting every rule rather than by writing defaults. */
+    fun resetDeviceRules() {
+        deviceRules.clear()
+        save()
+    }
 
     private val worldPresets = LinkedHashMap<String, WorldBinding>()
 
@@ -184,6 +221,18 @@ object ApSettings {
                     if (roomPalettePresets[room] == from) roomPalettePresets[room] = to
                 }
                 if (activePalette == from) activePalette = to
+                // A device rule can name a palette too, and a rule left pointing at the old name
+                // fails silently - it just falls back to a colour. (Ruleset preset files have the
+                // same problem and are not rewritten here; they live on disk, not in settings.)
+                var renamed = false
+                for (key in deviceRules.keys.toList()) {
+                    val target = deviceRules[key]
+                    if (target is AreaTarget.Palette && target.name == from) {
+                        deviceRules[key] = AreaTarget.Palette(to)
+                        renamed = true
+                    }
+                }
+                if (renamed) DeviceColumns.invalidate()
             }
 
             PresetKind.RULESETS -> {
@@ -253,6 +302,18 @@ object ApSettings {
                 roomPalettePresets[room] = preset.asString
             }
 
+            deviceRules.clear()
+            root.getAsJsonObject("deviceColumns")?.let { device ->
+                deviceEnabled = device.get("enabled")?.asBoolean ?: false
+                deviceSeedPerColumn = device.get("seedPerColumn")?.asBoolean ?: true
+                device.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
+                    val raw = value.asString
+                    deviceRules[key] =
+                        if (raw == DEVICE_RULE_OFF) null
+                        else PresetCodec.target(raw, path) ?: return@forEach
+                }
+            }
+
             recentDonors.clear()
             root.getAsJsonArray("recentDonors")?.forEach { id ->
                 if (recentDonors.size < MAX_RECENT_DONORS) recentDonors.add(id.asString)
@@ -305,6 +366,27 @@ object ApSettings {
             val roomPaletteBindings = JsonObject()
             for ((room, preset) in roomPalettePresets) roomPaletteBindings.addProperty(room, preset)
             add("roomPalettePresets", roomPaletteBindings)
+
+            add(
+                "deviceColumns",
+                JsonObject().apply {
+                    addProperty("enabled", deviceEnabled)
+                    addProperty("seedPerColumn", deviceSeedPerColumn)
+                    val rules = JsonObject()
+                    // Every rule is written, including the ones still on their default, so the file
+                    // shows what the feature will actually do rather than only what was changed.
+                    for (array in DeviceArray.entries) {
+                        for (source in DeviceSource.entries) {
+                            val target = deviceRule(array, source)
+                            rules.addProperty(
+                                deviceKey(array, source),
+                                if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
+                            )
+                        }
+                    }
+                    add("rules", rules)
+                },
+            )
 
             val recent = JsonArray()
             for (id in recentDonors) recent.add(id)

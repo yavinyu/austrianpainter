@@ -364,7 +364,11 @@ object PresetCodec {
         }
     }
 
-    private fun target(raw: String, source: Any): AreaTarget? {
+    /**
+     * Internal rather than private because the device column rules in [ApSettings] hold the same
+     * kind of value and must encode it the same way - `palette:` has to keep meaning one thing.
+     */
+    internal fun target(raw: String, source: Any): AreaTarget? {
         if (raw.startsWith(PALETTE_PREFIX)) {
             val name = ApPaths.sanitize(raw.removePrefix(PALETTE_PREFIX))
             if (name.isEmpty()) {
@@ -376,7 +380,7 @@ object PresetCodec {
         return block(raw, source)?.let { AreaTarget.Donor(it) }
     }
 
-    private fun targetValue(target: AreaTarget): String = when (target) {
+    internal fun targetValue(target: AreaTarget): String = when (target) {
         is AreaTarget.Donor -> BuiltInRegistries.BLOCK.getKey(target.block).toString()
         is AreaTarget.Palette -> PALETTE_PREFIX + target.name
     }

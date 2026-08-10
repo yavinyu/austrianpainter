@@ -1,6 +1,7 @@
 package com.maxisch.dungeon
 
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.DeviceColumns
 import com.maxisch.paint.PaintStorage
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -13,6 +14,9 @@ object RoomTracker {
 
     private var wasInDungeon = false
 
+    /** Edge-detects [DeviceColumns.shouldApply] so the view is only rebuilt when it actually flips. */
+    private var deviceActive = false
+
     fun tick() {
         DungeonLocation.tick()
 
@@ -21,6 +25,12 @@ object RoomTracker {
         } else if (wasInDungeon) {
             wasInDungeon = false
             RoomScanner.reset()
+        }
+
+        val device = DeviceColumns.shouldApply()
+        if (device != deviceActive) {
+            deviceActive = device
+            PaintStorage.onDeviceScopeChanged()
         }
 
         val next = resolve()
@@ -37,6 +47,8 @@ object RoomTracker {
         DungeonLocation.reset()
         RoomScanner.reset()
         wasInDungeon = false
+        // Re-arms the edge, so joining a fresh instance inside the arena still fires it.
+        deviceActive = false
 
         val had = scope != null
         scope = null

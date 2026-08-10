@@ -1,11 +1,17 @@
 package com.maxisch.client
 
 import com.maxisch.client.render.CullDiagnostics
+import com.maxisch.dungeon.DeviceColumnData
 import com.maxisch.dungeon.DungeonLocation
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.paint.ApSettings
+import com.maxisch.paint.DeviceArray
+import com.maxisch.paint.DeviceColumns
+import com.maxisch.paint.DeviceSource
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.displayName
 import com.maxisch.paint.session.PaintBrush
+import com.maxisch.paint.session.PaintSelection
 import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
@@ -82,6 +88,30 @@ object PaintCommands {
                             .then(
                                 ClientCommands.literal("raw").executes { context ->
                                     dumpRawSidebar(context.source)
+                                },
+                            ),
+                    )
+                    .then(
+                        ClientCommands.literal("device")
+                            .executes { context -> deviceStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("on").executes { context ->
+                                    setDeviceEnabled(context.source, true)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("off").executes { context ->
+                                    setDeviceEnabled(context.source, false)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("nearest").executes { context ->
+                                    deviceNearest(context.source)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("probe").executes { context ->
+                                    deviceProbe(context.source)
                                 },
                             ),
                     )
@@ -250,6 +280,123 @@ object PaintCommands {
             PaintStorage.positionsByDonor().values.sum(),
         )
     }
+
+    // ---------------------------------------------------------------- device columns
+
+    private fun setDeviceEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
+        ApSettings.deviceEnabled = enabled
+        ApSettings.save()
+        DeviceColumns.invalidate()
+        PaintStorage.onDeviceScopeChanged()
+        return deviceStatus(source)
+    }
+
+    /**
+     * Without this the layer is invisible until it fails: the pillars only exist on one floor of
+     * one server, so "nothing happened" has half a dozen equally plausible causes.
+     */
+    private fun deviceStatus(source: FabricClientCommandSource): Int {
+        if (!DeviceColumnData.loaded) return feedback(source, "austrianpainter.device.no_data")
+
+        feedback(
+            source,
+            "austrianpainter.device.status",
+            Component.translatable(
+                if (ApSettings.deviceEnabled) "austrianpainter.device.on" else "austrianpainter.device.off",
+            ),
+            DeviceColumnData.columnCount,
+            DeviceColumns.ruleCount(),
+        )
+
+        feedback(
+            source,
+            if (DeviceColumns.shouldApply()) {
+                "austrianpainter.device.active"
+            } else {
+                "austrianpainter.device.inactive"
+            },
+        )
+
+        for (array in DeviceArray.entries) {
+            for (deviceSource in DeviceSource.entries) {
+                val target = ApSettings.deviceRule(array, deviceSource)
+                source.sendFeedback(
+                    if (target == null) {
+                        Component.translatable(
+                            "austrianpainter.device.row_off",
+                            arrayName(array),
+                            deviceSource.block.name,
+                        )
+                    } else {
+                        Component.translatable(
+                            "austrianpainter.device.row",
+                            arrayName(array),
+                            deviceSource.block.name,
+                            target.displayName(),
+                        )
+                    },
+                )
+            }
+        }
+        return 1
+    }
+
+    /** Finds a column to stand at without having to open the bundled coordinate file. */
+    private fun deviceNearest(source: FabricClientCommandSource): Int {
+        val player = source.player
+        val column = DeviceColumns.nearestColumn(player.blockX, player.blockZ)
+            ?: return feedback(source, "austrianpainter.device.no_data")
+
+        source.sendFeedback(
+            Component.translatable(
+                "austrianpainter.device.nearest",
+                column.base.x,
+                column.base.z,
+                arrayName(column.array),
+                column.minY,
+                column.maxY,
+            ).withStyle { style ->
+                style.withUnderlined(true).withClickEvent(
+                    ClickEvent.SuggestCommand("/tp ${column.base.x} ${column.minY} ${column.base.z}"),
+                )
+            },
+        )
+        return 1
+    }
+
+    /**
+     * Answers "is my rule wrong, is my band wrong, or is that block simply not diorite" in one
+     * line, which is otherwise three separate guesses.
+     */
+    private fun deviceProbe(source: FabricClientCommandSource): Int {
+        val pos = PaintSelection.lookedAtPos()
+            ?: return feedback(source, "austrianpainter.brush.miss")
+        val block = PaintSelection.lookedAtBlock()
+            ?: return feedback(source, "austrianpainter.brush.miss")
+
+        val column = DeviceColumns.columnAt(pos.x, pos.z)
+            ?: return feedback(source, "austrianpainter.device.probe_miss")
+
+        val deviceSource = DeviceColumns.sourceFor(block)
+        val donor = if (deviceSource == null || pos.y < column.minY || pos.y > column.maxY) {
+            null
+        } else {
+            DeviceColumns.donorFor(column.array, deviceSource, pos.x, pos.y, pos.z)
+        }
+
+        return feedback(
+            source,
+            if (donor == null) "austrianpainter.device.probe_plain" else "austrianpainter.device.probe_hit",
+            arrayName(column.array),
+            column.minY,
+            column.maxY,
+            block.name,
+            donor?.name ?: Component.empty(),
+        )
+    }
+
+    private fun arrayName(array: DeviceArray): Component =
+        Component.translatable("austrianpainter.device.array.${array.key}")
 
     private fun status(source: FabricClientCommandSource): Int {
         val donor: Block? = PaintBrush.donor

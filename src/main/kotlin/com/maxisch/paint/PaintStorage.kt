@@ -32,6 +32,8 @@ object PaintStorage {
 
     fun onScopeChanged(next: RoomScope?) = PaintSession.onScopeChanged(next)
 
+    fun onDeviceScopeChanged() = PaintSession.onDeviceScopeChanged()
+
     fun tick() = PaintSession.tick()
 
     fun flush() = PaintSession.flush()
