@@ -168,6 +168,25 @@ object PaintCommands {
                                     )
                                 },
                         ),
+                    )
+                    .then(
+                        ClientCommands.literal("keys")
+                            .executes { context -> keysStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("on").executes { context ->
+                                    setKeybindsEnabled(context.source, true)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("off").executes { context ->
+                                    setKeybindsEnabled(context.source, false)
+                                },
+                            )
+                            .then(
+                                ClientCommands.literal("toggle").executes { context ->
+                                    setKeybindsEnabled(context.source, !ApSettings.keybindsEnabled)
+                                },
+                            ),
                     ),
             )
         }
@@ -397,6 +416,19 @@ object PaintCommands {
 
     private fun arrayName(array: DeviceArray): Component =
         Component.translatable("austrianpainter.device.array.${array.key}")
+
+    private fun setKeybindsEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
+        ApSettings.keybindsEnabled = enabled
+        ApSettings.save()
+        return keysStatus(source)
+    }
+
+    private fun keysStatus(source: FabricClientCommandSource): Int {
+        return feedback(
+            source,
+            if (ApSettings.keybindsEnabled) "austrianpainter.keys.on" else "austrianpainter.keys.off",
+        )
+    }
 
     private fun status(source: FabricClientCommandSource): Int {
         val donor: Block? = PaintBrush.donor

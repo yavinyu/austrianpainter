@@ -73,6 +73,12 @@ object ApSettings {
     /** Adds the brush-resize gesture to the HUD; on until the player turns it off. */
     var showHints: Boolean = true
 
+    /** Adds the real block under the crosshair to the HUD; independent of showHud. */
+    var showLookingAt: Boolean = true
+
+    /** Master switch for every PaintKeys action; the KeyMapping objects stay registered either way. */
+    var keybindsEnabled: Boolean = true
+
     /** Whether the one-time "press X to open the paint menu" chat line has already been sent. */
     var seenIntro: Boolean = false
 
@@ -266,6 +272,8 @@ object ApSettings {
             paintSound = root.get("paintSound")?.asBoolean ?: true
             showHud = root.get("showHud")?.asBoolean ?: true
             showHints = root.get("showHints")?.asBoolean ?: true
+            showLookingAt = root.get("showLookingAt")?.asBoolean ?: true
+            keybindsEnabled = root.get("keybindsEnabled")?.asBoolean ?: true
             // Defaults false so configs written before the hint existed still get it once.
             seenIntro = root.get("seenIntro")?.asBoolean ?: false
             dungeonRoomScope = root.get("dungeonRoomScope")?.asBoolean ?: true
@@ -342,6 +350,8 @@ object ApSettings {
             addProperty("paintSound", paintSound)
             addProperty("showHud", showHud)
             addProperty("showHints", showHints)
+            addProperty("showLookingAt", showLookingAt)
+            addProperty("keybindsEnabled", keybindsEnabled)
             addProperty("seenIntro", seenIntro)
             addProperty("dungeonRoomScope", dungeonRoomScope)
             addProperty("areaOutlineColor", areaOutlineColor)
