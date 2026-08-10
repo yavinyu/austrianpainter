@@ -17,6 +17,7 @@ internal object PaintIndexBuilder {
         // Cheap: the rules themselves are cached in DeviceColumns and only rebuilt when one of
         // them changes, so a brush stroke does not re-read palette files.
         val columns = DeviceColumns.activeColumns()
+        val zones = BossZones.activeZones()
         val dimension = PaintSession.currentDimension()
         val absolute = dimension?.let { PaintRules.blocks.positionsIn(it) }
         val scope = PaintSession.scope
@@ -26,7 +27,7 @@ internal object PaintIndexBuilder {
         }?.takeUnless { it.isEmpty() }
 
         if (scope == null || room == null) {
-            PaintIndex.rebuild(absolute, PaintRules.types.map, columns)
+            PaintIndex.rebuild(absolute, PaintRules.types.map, columns, zones)
             return
         }
 
@@ -39,6 +40,6 @@ internal object PaintIndexBuilder {
             val world = RoomTransform.toWorld(BlockPos.of(entry.longKey), scope.origin, scope.rotation)
             merged.put(world.asLong(), entry.value)
         }
-        PaintIndex.rebuild(merged, PaintRules.types.map, columns)
+        PaintIndex.rebuild(merged, PaintRules.types.map, columns, zones)
     }
 }
