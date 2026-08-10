@@ -57,6 +57,8 @@ All under the **Austrian Painter** category in Controls.
 | `]` | Set area corner 2 |
 | `\` | Clear the area selection |
 | `Z` | Undo the last paint change |
+| `Y` | Redo the change you just undid |
+| `J` | Outline the painted blocks around you |
 
 **Hold the paint key and scroll** to resize the brush. This is the one gesture with no button
 behind it; the HUD says so while the brush is on (turn that off under Settings → Show usage hints).
@@ -76,7 +78,7 @@ A client command. Nothing here reaches the server.
 | `on` / `off` / `toggle` | Arm or disarm the brush |
 | `donor <block>` | Set the donor block, and arm the brush |
 | `radius <1-5>` | Brush size; a radius of `r` paints a cube of side `2r-1` |
-| `undo` | Same as the undo key |
+| `undo` / `redo` | Same as the undo and redo keys |
 | `room` | Dungeon diagnostics: known room cores, floor, scope key, origin, rotation, painted count |
 | `cull` / `cull reset` | Face-culling counters, for diagnosing a hole in a wall |
 | `dungeon <off\|F1-F7\|M1-M7> [boss]` | Pretend to be on that floor. Session only — see below |
@@ -86,12 +88,20 @@ A client command. Nothing here reaches the server.
 
 ## The paint menu
 
-One screen, four tabs, reached with `P`.
+One screen, five tabs, reached with `P`.
 
 **Brush** — choose a donor, arm the brush, set the size and the mode, then `Apply` for the block
 you are looking at. The list underneath is everything painted in the current scope, grouped by
 donor; click a row to delete that whole group. Removing a *single* position stays a world action:
 look at it and press the erase key.
+
+**Outlines** here toggles the painted-block overlay. Paint is invisible as paint — a painted block
+renders as its donor — so this outlines the painted blocks around you, which is the only way to see
+your own work or find a position you painted by accident. Radius and colour are under Settings; past
+4,000 blocks it draws nothing and says so rather than showing a misleading subset.
+
+The block picker keeps a **Recent** row of the donors you picked last, so the common case never
+needs the search box.
 
 Mode is either **Position** (this one block) or **Block type** (every block of that type,
 everywhere). Both read whatever you were looking at when the menu opened — the crosshair freezes as
@@ -130,6 +140,17 @@ The rules are a *ruleset*. **Reapply last** drops the previous apply's rules ont
 box, and **Save ruleset** / **Load ruleset** keep them in a named preset for good (create and switch
 those on the Presets tab).
 
+**Preview** outlines exactly what a Replace would repaint, before you commit it — it runs the same
+grouping call the apply does, so the two cannot drift apart.
+
+**Select room** sets both corners to the dungeon room you are standing in, which beats flying to
+opposite corners. L-shaped rooms get no box: their bounding rectangle would cover a neighbouring
+room's cells, and paint written there would be filed under this room's coordinates.
+
+**Shape** narrows an apply to the box's shell, walls, floor, ceiling, or the largest ellipsoid that
+fits it. The filter lives in the scan, so the block counts in the list always describe what the
+shape will really hit.
+
 To undo paint rather than change it, **Unpaint selected** strips the paint off whatever the
 highlighted rows match, and **Unpaint area** strips it off the whole box. Both ask first.
 
@@ -139,17 +160,26 @@ The selection is drawn in-world as a coloured box (colours are configurable). Th
 **Palette** — add and remove donors, and scroll a row to change its weight (hold shift for ±10).
 Weights are relative, so each row shows the share it works out to.
 
-**Presets** — one folder manager for every kind. New, Duplicate, Rename, Delete, Activate.
-Every refusal says why rather than doing nothing.
+**Presets** — one folder manager for every kind. New, Duplicate, Rename, Delete, Activate. The pane
+on the right shows what is actually inside the selected preset, so a ruleset or palette can be read
+without opening its JSON. **Copy** puts the active preset on the clipboard and **Paste** creates a
+new one from whatever is on it — a paste always makes a new preset from the name box, never
+overwrites. Every refusal says why rather than doing nothing.
+
+**History** — the undo stack, newest first, with the change that Undo will take called out. Until
+this existed the only signal was a number on the footer button.
 
 Results appear on the status line above the footer, not in chat — chat is unreadable while a screen
 is open. Actions triggered by a keybind, where no screen is up, still report to chat.
 
 ---
 
-## Undo
+## Undo and redo
 
-The last **20** changes can be undone, with the `Z` key, the footer button, or `/paintbrush undo`.
+The last **20** changes can be undone, with the `Z` key, the footer button, the History tab, or
+`/paintbrush undo`. Redo is the same in reverse: `Y`, the footer button, or `/paintbrush redo`.
+Making any *new* change drops the redo stack — once the timeline forks there is no honest way to
+replay the branch that was abandoned.
 
 Two deliberate limits:
 
@@ -159,8 +189,6 @@ Two deliberate limits:
 - The history is cleared whenever the scope changes: joining a world, leaving one, switching a
   preset, or walking through a Catacombs doorway. Recorded coordinates belong to one slice's
   coordinate space and cannot be replayed into another.
-
-There is no redo.
 
 ---
 

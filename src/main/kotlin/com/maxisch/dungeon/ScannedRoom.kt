@@ -26,6 +26,36 @@ internal class ScannedRoom(val data: RoomData, first: RoomTile, row: Int, column
     val oriented: Boolean
         get() = clayPos != null && rotation != null
 
+    /**
+     * The two corners of the whole prefab in world space, for "select this room" in the area
+     * screen. [floor] is the bottom of the box - only the roof is known from the scan, so the
+     * caller decides how far down to go.
+     *
+     * L rooms get no box on purpose: their bounding rectangle covers cells that belong to a
+     * neighbouring room, and paint written there would be filed under this room's coordinates.
+     */
+    internal fun corners(floor: Int): Pair<BlockPos, BlockPos>? {
+        if (data.shape == RoomShape.SL) return null
+
+        val solid = tiles.filterNot { it.isSeparator }
+        if (solid.isEmpty()) return null
+        val roof = highestBlock ?: WorldProbe.highestY(mainRoom.x, mainRoom.z).takeIf { it > 0 } ?: return null
+
+        var minX = Int.MAX_VALUE
+        var maxX = Int.MIN_VALUE
+        var minZ = Int.MAX_VALUE
+        var maxZ = Int.MIN_VALUE
+        for (tile in solid) {
+            if (tile.x < minX) minX = tile.x
+            if (tile.x > maxX) maxX = tile.x
+            if (tile.z < minZ) minZ = tile.z
+            if (tile.z > maxZ) maxZ = tile.z
+        }
+
+        return BlockPos(minX - HALF_ROOM, floor, minZ - HALF_ROOM) to
+            BlockPos(maxX + HALF_ROOM, roof, maxZ + HALF_ROOM)
+    }
+
     fun addTile(row: Int, column: Int, tile: RoomTile) {
         tiles.removeIf { it.x == tile.x && it.z == tile.z }
         tiles.add(tile)

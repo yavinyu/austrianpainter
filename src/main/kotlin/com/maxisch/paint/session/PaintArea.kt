@@ -18,6 +18,9 @@ object PaintArea {
     var corner1: BlockPos? = null
     var corner2: BlockPos? = null
 
+    /** Which part of the box counts. Applied by the scan, so the counts match what an apply hits. */
+    var shape: AreaShape = AreaShape.SOLID
+
     /**
      * Rows the player has highlighted in the area list. Only an editing cursor: picking a donor
      * assigns it to everything in here, and nothing is painted off this set directly.
@@ -77,6 +80,7 @@ object PaintArea {
         return AABB.encapsulatingFullBlocks(lone, lone)
     }
 
+    /** Every position the current [shape] covers. [volume] stays the whole box - it bounds the walk. */
     fun positions(): Sequence<BlockPos> {
         val min = min() ?: return emptySequence()
         val max = max() ?: return emptySequence()
@@ -86,6 +90,7 @@ object PaintArea {
             for (x in min.x..max.x) {
                 for (y in min.y..max.y) {
                     for (z in min.z..max.z) {
+                        if (!shape.contains(x, y, z, min, max)) continue
                         yield(cursor.set(x, y, z).immutable())
                     }
                 }
@@ -115,6 +120,7 @@ object PaintArea {
 
     fun reset() {
         clearSelection()
+        shape = AreaShape.SOLID
         lastRules = emptyMap()
         lastPaletteApplied = emptyMap()
     }

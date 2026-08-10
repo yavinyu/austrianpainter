@@ -85,12 +85,21 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         Button.builder(Component.translatable("austrianpainter.presets.delete")) { delete() }.width(100).build(),
     )
 
+    private val copyButton = add(
+        Button.builder(Component.translatable("austrianpainter.presets.copy")) { copy() }.width(100).build(),
+    )
+
+    private val pasteButton = add(
+        Button.builder(Component.translatable("austrianpainter.presets.paste")) { paste() }.width(100).build(),
+    )
+
     private val list = add(
         RowListWidget<String>(0, 0, 0, 0, ROW_HEIGHT).apply {
             emptyMessage = { Component.translatable("austrianpainter.presets.empty") }
             isSelected = { it == selected }
             onRowClick = { name ->
                 selected = name
+                contents.rows = store.contents(name)
                 refreshButtons()
             }
             drawRow = { graphics, name, x, y, _ ->
@@ -100,6 +109,21 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
                     Component.translatable("austrianpainter.presets.row", name, store.entryCount(name))
                 }
                 graphics.text(font, label, x + 4, y + 3, 0xFFFFFFFF.toInt())
+            }
+        },
+    )
+
+    private val contents = add(
+        RowListWidget<Component>(0, 0, 0, 0, ROW_HEIGHT).apply {
+            emptyMessage = {
+                if (selected == null) {
+                    Component.translatable("austrianpainter.presets.contents_none")
+                } else {
+                    Component.translatable("austrianpainter.presets.contents_empty")
+                }
+            }
+            drawRow = { graphics, line, x, y, _ ->
+                graphics.text(font, line, x + 4, y + 3, 0xFFFFFFFF.toInt())
             }
         },
     )
@@ -132,12 +156,24 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         }
         y += BUTTON_HEIGHT + GAP
 
-        activateButton.setRectangle(activateButton.width, BUTTON_HEIGHT, x, y)
-        deleteButton.setRectangle(deleteButton.width, BUTTON_HEIGHT, x + activateButton.width + GAP, y)
+        var actionX = x
+        for (button in listOf(activateButton, deleteButton, copyButton, pasteButton)) {
+            button.setRectangle(button.width, BUTTON_HEIGHT, actionX, y)
+            actionX += button.width + GAP
+        }
         y += BUTTON_HEIGHT + GAP * 2
 
         val listHeight = (area.bottom() - y - GAP).coerceAtLeast(ROW_HEIGHT)
-        list.setRectangle(contentWidth, listHeight, x, y)
+        // Names on the left, what is inside the selected one on the right. The gap is doubled so
+        // the two scissored lists never look like one.
+        val namesWidth = ((contentWidth - GAP * 2) * 2 / 5).coerceAtLeast(ROW_HEIGHT)
+        list.setRectangle(namesWidth, listHeight, x, y)
+        contents.setRectangle(
+            (contentWidth - namesWidth - GAP * 2).coerceAtLeast(ROW_HEIGHT),
+            listHeight,
+            x + namesWidth + GAP * 2,
+            y,
+        )
     }
 
     // ------------------------------------------------------------------ actions
@@ -199,6 +235,32 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         screen.status(Component.translatable("austrianpainter.presets.deleted", name))
     }
 
+    /**
+     * Copies the *active* preset rather than the selected one: only the active one is guaranteed to
+     * hold unsaved edits, and copying a stale file would be a quiet lie.
+     */
+    private fun copy() {
+        Minecraft.getInstance().keyboardHandler.setClipboard(store.exportActive())
+        screen.status(Component.translatable("austrianpainter.presets.copied", store.activeName))
+    }
+
+    /** Always a new preset from the name box - a paste can never silently replace existing work. */
+    private fun paste() {
+        val text = Minecraft.getInstance().keyboardHandler.clipboard
+        if (text.isBlank()) {
+            screen.status(Component.translatable("austrianpainter.presets.clipboard_empty"))
+            return
+        }
+
+        val name = store.importAs(nameBox.value, text)
+        if (name == null) {
+            refuse(nameBox.value)
+            return
+        }
+        select(name)
+        screen.status(Component.translatable("austrianpainter.presets.pasted", name, store.entryCount(name)))
+    }
+
     /** Says which of the two reasons a name was rejected for, rather than doing nothing. */
     private fun refuse(typed: String) {
         val clean = ApPaths.sanitize(typed)
@@ -222,6 +284,7 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     override fun refresh() {
         list.rows = store.listWithActive()
         if (selected != null && selected !in list.rows) selected = null
+        contents.rows = selected?.let { store.contents(it) } ?: emptyList()
         kindButton.message = kindLabel()
         headerLine.message = Component.translatable("austrianpainter.presets.active", store.activeName)
         refreshButtons()
@@ -236,6 +299,7 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         deleteButton.active = chosen != null
         duplicateButton.active = chosen != null && nameFree
         renameButton.active = chosen != null && nameFree
+        pasteButton.active = nameFree
     }
 
     private fun kindLabel(): Component = Component.translatable(

@@ -92,6 +92,12 @@ object PaintCommands {
                         },
                     )
                     .then(
+                        ClientCommands.literal("redo").executes { context ->
+                            context.source.sendFeedback(PaintStorage.redo())
+                            1
+                        },
+                    )
+                    .then(
                         ClientCommands.literal("cull").executes { context ->
                             context.source.sendFeedback(Component.literal(CullDiagnostics.summary()))
                             1

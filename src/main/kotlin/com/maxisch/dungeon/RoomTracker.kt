@@ -43,6 +43,24 @@ object RoomTracker {
         if (had) PaintStorage.onScopeChanged(null)
     }
 
+    /**
+     * The two corners of the dungeon room the player is standing in, so the area screen can select
+     * it in one click instead of flying to opposite corners.
+     *
+     * Null outside a room, in a boss room (those are fixed coordinates and need no box), and for an
+     * L-shaped room - see [ScannedRoom.corners]. The floor is the bottom of the world: the scan
+     * knows the roof but never probes for a floor, and [com.maxisch.paint.session.PaintArea] clamps
+     * whatever it is given.
+     */
+    fun currentRoomCorners(): Pair<BlockPos, BlockPos>? {
+        if (scope?.isBoss != false) return null
+
+        val client = Minecraft.getInstance()
+        val level = client.level ?: return null
+        val player = client.player ?: return null
+        return RoomScanner.roomAt(player.position())?.corners(level.minY)
+    }
+
     private fun resolve(): RoomScope? {
         if (!ApSettings.dungeonRoomScope) return null
         if (!DungeonLocation.inDungeon) return null

@@ -1,12 +1,16 @@
 package com.maxisch.client.gui.tab
 
+import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.BlockSearch
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
+import com.maxisch.client.render.BlockHighlight
 import com.maxisch.paint.AreaSelector
 import com.maxisch.paint.PaintFilter
+import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.session.AreaShape
 import com.maxisch.paint.session.PaintArea
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
@@ -163,7 +167,33 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             PaintArea.clearSelection()
             syncFields()
             rescan()
-        }.width(105).build(),
+        }
+            .width(105)
+            .tooltip(KeyHints.clearAreaTooltip())
+            .build(),
+    )
+
+    private val selectRoomButton = add(
+        Button.builder(Component.translatable("austrianpainter.area.select_room")) { selectRoom() }
+            .width(105).build(),
+    )
+
+    private val shapeButton = add(
+        Button.builder(shapeLabel()) { cycleShape() }.width(120).build(),
+    )
+
+    private val previewButton = add(
+        Button.builder(Component.translatable("austrianpainter.area.preview")) {
+            logic.preview()
+            refreshButtons()
+        }.width(90).build(),
+    )
+
+    private val clearPreviewButton = add(
+        Button.builder(Component.translatable("austrianpainter.area.clear_preview")) {
+            logic.clearPreview()
+            refreshButtons()
+        }.width(110).build(),
     )
 
     private val rescanButton = add(
@@ -212,6 +242,41 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     init {
         searchBox.setResponder { applyFilter() }
     }
+
+    // ------------------------------------------------------------------ room and shape
+
+    /** The scan already knows where the room is; flying to two opposite corners is busywork. */
+    private fun selectRoom() {
+        val corners = PaintStorage.currentRoomCorners()
+        if (corners == null) {
+            screen.status(Component.translatable("austrianpainter.area.no_room"))
+            return
+        }
+
+        PaintArea.setCorner(first = true, pos = corners.first)
+        PaintArea.setCorner(first = false, pos = corners.second)
+        syncFields()
+        rescan()
+        screen.status(
+            Component.translatable(
+                "austrianpainter.area.room_selected",
+                PaintStorage.scope?.key ?: "?",
+                PaintArea.volume(),
+            ),
+        )
+    }
+
+    private fun cycleShape() {
+        val shapes = AreaShape.entries
+        PaintArea.shape = shapes[(PaintArea.shape.ordinal + 1) % shapes.size]
+        // The counts in the list are shape-filtered, so they are wrong until this rescans.
+        rescan()
+    }
+
+    private fun shapeLabel(): Component = Component.translatable(
+        "austrianpainter.area.shape",
+        Component.translatable("austrianpainter.area.shape.${PaintArea.shape.key}"),
+    )
 
     // ------------------------------------------------------------------ selection
 
@@ -315,6 +380,8 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         y = placeButtons(x, y, replaceButton, replaceRandomButton, rerollButton)
         y = placeButtons(x, y, reapplyButton, saveRulesetButton, loadRulesetButton)
         y = placeButtons(x, y, clearMappingButton, unpaintSelectedButton, clearPaintedButton)
+        y = placeButtons(x, y, previewButton, clearPreviewButton, selectRoomButton)
+        y = placeButtons(x, y, shapeButton)
 
         // The search box shares the last row with the two selection buttons: it belongs directly
         // above the list it filters, and a row of its own would cost the list another 24 pixels.
@@ -427,6 +494,10 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         clearMappingButton.active = PaintArea.hasRules
         unpaintSelectedButton.active = boxReady && hasSelection
         clearPaintedButton.active = boxReady
+        previewButton.active = boxReady && PaintArea.hasRules
+        clearPreviewButton.active = BlockHighlight.hasPreview
+        selectRoomButton.active = PaintStorage.scope?.isBoss == false
+        shapeButton.message = shapeLabel()
 
         sizeLine.message = logic.sizeText()
         sizeLine.color = if (logic.tooBig()) RED else GREY
