@@ -60,6 +60,9 @@ class RowListWidget<T>(
      */
     var onRowSelect: ((row: T, index: Int, ctrl: Boolean, shift: Boolean) -> Unit)? = null
 
+    /** Fired in addition to [onRowSelect]/[onRowClick] when the click is the second of a double click. */
+    var onRowDoubleClick: ((T) -> Unit)? = null
+
     /**
      * Wheel over a row. Returning true consumes the event so the list does not also scroll - that
      * is how the palette edits a weight under the cursor.
@@ -104,9 +107,10 @@ class RowListWidget<T>(
         val select = onRowSelect
         if (select != null) {
             select(row, index, held(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL), held(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT))
-            return
+        } else {
+            onRowClick?.invoke(row)
         }
-        onRowClick?.invoke(row)
+        if (doubled) onRowDoubleClick?.invoke(row)
     }
 
     /** The click event carries no modifiers in 26.2, so ask the window directly. */

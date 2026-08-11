@@ -18,7 +18,6 @@ import dev.isxander.yacl3.api.controller.ColorControllerBuilder
 import dev.isxander.yacl3.api.controller.CyclingListControllerBuilder
 import dev.isxander.yacl3.api.controller.IntegerSliderControllerBuilder
 import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 import java.awt.Color
@@ -338,34 +337,6 @@ object ApSettingsScreen {
                                     )
                                     .action { _, _ ->
                                         PaintStorage.scope?.key?.let { ApSettings.bindRoomPalettes(it, null) }
-                                    }
-                                    .build(),
-                            )
-                            .option(
-                                ButtonOption.createBuilder()
-                                    .name(Component.translatable("austrianpainter.settings.device"))
-                                    .description(
-                                        OptionDescription.of(
-                                            Component.translatable("austrianpainter.settings.device.desc"),
-                                        ),
-                                    )
-                                    // Its own screen rather than YACL options: a rule picks a block
-                                    // or a palette, and YACL has no controller for either.
-                                    .action { screen, _ ->
-                                        Minecraft.getInstance().setScreenAndShow(DeviceRulesScreen(screen))
-                                    }
-                                    .build(),
-                            )
-                            .option(
-                                ButtonOption.createBuilder()
-                                    .name(Component.translatable("austrianpainter.settings.zones"))
-                                    .description(
-                                        OptionDescription.of(
-                                            Component.translatable("austrianpainter.settings.zones.desc"),
-                                        ),
-                                    )
-                                    .action { screen, _ ->
-                                        Minecraft.getInstance().setScreenAndShow(BossZoneRulesScreen(screen))
                                     }
                                     .build(),
                             )

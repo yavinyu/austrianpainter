@@ -4,10 +4,12 @@ import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.tab.ApTab
 import com.maxisch.client.gui.tab.AreaTab
 import com.maxisch.client.gui.tab.BrushTab
+import com.maxisch.client.gui.tab.DungeonTab
 import com.maxisch.client.gui.tab.HistoryTab
-import com.maxisch.client.gui.tab.PaletteTab
 import com.maxisch.client.gui.tab.PresetsTab
+import com.maxisch.client.gui.tab.SettingsTab
 import com.maxisch.paint.PaintStorage
+import com.maxisch.paint.PresetKind
 import com.maxisch.paint.session.PaintSelection
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -29,7 +31,8 @@ import net.minecraft.world.level.block.Block
  *
  * Everything the mod can do is one tab click away rather than several screens deep, and results are
  * reported on a status line here instead of in chat, which the player cannot see while a screen is
- * open. Settings stay in the YACL screen ([ApSettingsScreen]) and block picking stays a modal
+ * open. The YACL screen ([ApSettingsScreen]) still exists as ModMenu's config-button target, but the
+ * Settings tab here is the primary way to reach every option. Block picking stays a modal
  * ([BlockPickerScreen]) - the picker needs the full screen height for its grid.
  */
 class PainterScreen private constructor(parent: Screen?) :
@@ -39,9 +42,10 @@ class PainterScreen private constructor(parent: Screen?) :
     enum class TabId(val titleKey: String) {
         BRUSH("austrianpainter.tab.brush"),
         AREA("austrianpainter.tab.area"),
-        PALETTE("austrianpainter.tab.palette"),
+        DUNGEON("austrianpainter.tab.dungeon"),
         PRESETS("austrianpainter.tab.presets"),
         HISTORY("austrianpainter.tab.history"),
+        SETTINGS("austrianpainter.tab.settings"),
     }
 
     companion object {
@@ -78,7 +82,7 @@ class PainterScreen private constructor(parent: Screen?) :
         { widget: AbstractWidget -> addRenderableWidget(widget) },
         { widget: AbstractWidget -> removeWidget(widget) },
         { tab: Tab? -> tab?.let { onTabEntered(it) } },
-        { _: Tab? -> },
+        { tab: Tab? -> (tab as? ApTab)?.onHidden() },
     )
 
     private var tabBar: TabNavigationBar? = null
@@ -141,7 +145,14 @@ class PainterScreen private constructor(parent: Screen?) :
         lookedAtPos = PaintSelection.lookedAtPos()
         lookedAtBlock = PaintSelection.lookedAtBlock()
 
-        tabs = listOf(BrushTab(this), AreaTab(this), PaletteTab(this), PresetsTab(this), HistoryTab(this))
+        tabs = listOf(
+            BrushTab(this),
+            AreaTab(this),
+            DungeonTab(this),
+            PresetsTab(this),
+            HistoryTab(this),
+            SettingsTab(this),
+        )
 
         val bar = TabNavigationBar.builder(tabManager, width)
             .addTabs(*tabs.toTypedArray<Tab>())
@@ -169,7 +180,7 @@ class PainterScreen private constructor(parent: Screen?) :
         )
         footer.addChild(
             Button.builder(Component.translatable("austrianpainter.settings")) {
-                minecraft.setScreenAndShow(ApSettingsScreen.create(this))
+                tabBar?.selectTab(TabId.SETTINGS.ordinal, true)
             }.width(100).build(),
         )
         footer.addChild(
@@ -188,6 +199,12 @@ class PainterScreen private constructor(parent: Screen?) :
         (tab as? ApTab)?.refresh()
     }
 
+    /** For the Settings tab's "Manage..." buttons: jump to Presets already on the right kind. */
+    fun switchToPresets(kind: PresetKind) {
+        (tabs.firstOrNull { it is PresetsTab } as? PresetsTab)?.selectKind(kind)
+        tabBar?.selectTab(TabId.PRESETS.ordinal, true)
+    }
+
     override fun repositionElements() {
         val bar = tabBar ?: return
         bar.updateWidth(width)
@@ -202,6 +219,13 @@ class PainterScreen private constructor(parent: Screen?) :
     override fun tick() {
         super.tick()
         (tabManager.currentTab as? ApTab)?.tick()
+    }
+
+    /** Closing the screen doesn't go through a tab switch, so the visible tab never otherwise gets
+     *  a chance to batch its last edit into one rebuild - see [ApTab.onHidden]. */
+    override fun onClose() {
+        (tabManager.currentTab as? ApTab)?.onHidden()
+        super.onClose()
     }
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
