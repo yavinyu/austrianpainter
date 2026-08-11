@@ -41,4 +41,11 @@ abstract class ApTab(private val titleKey: String) : Tab {
 
     /** Called when the tab becomes visible, and whenever it changes something itself. */
     open fun refresh() = Unit
+
+    /**
+     * Called when this tab stops being the visible one - by switching to another tab, or by the
+     * screen closing. Lets a tab batch several edits into one expensive rebuild instead of paying
+     * it once per click.
+     */
+    open fun onHidden() = Unit
 }
