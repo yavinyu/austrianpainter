@@ -1,5 +1,8 @@
 package com.maxisch.client.gui.widget
 
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.NVGUtils
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
 import net.minecraft.client.gui.narration.NarrationElementOutput
@@ -23,13 +26,6 @@ class ToggleSwitchWidget(
 ) : AbstractWidget(x, y, w, h, CommonComponents.EMPTY) {
 
     private companion object {
-        const val TRACK_OFF = 0xFF3A3A3A.toInt()
-        const val TRACK_DISABLED = 0xFF2A2A2A.toInt()
-        const val KNOB = 0xFFE8E8E8.toInt()
-        const val KNOB_DISABLED = 0xFF808080.toInt()
-        const val OUTLINE = 0xFFFFFFFF.toInt()
-        const val OUTLINE_DIM = 0xFF707070.toInt()
-        const val HOVER_TINT = 0x30FFFFFF
         const val KNOB_INSET = 2
     }
 
@@ -46,22 +42,51 @@ class ToggleSwitchWidget(
     ) {
         val hovered = active && mouseX in x..(x + width) && mouseY in y..(y + height)
         val track = when {
-            !active -> TRACK_DISABLED
+            !active -> Theme.SWITCH_TRACK_DISABLED
             checked -> accent
-            else -> TRACK_OFF
+            else -> Theme.SWITCH_TRACK_OFF
         }
-        graphics.fill(x, y, x + width, y + height, track)
-        if (hovered) graphics.fill(x, y, x + width, y + height, HOVER_TINT)
-        graphics.outline(x, y, width, height, if (active) OUTLINE else OUTLINE_DIM)
+        val outline = if (active) Theme.OUTLINE else Theme.OUTLINE_DIM
+        val knob = if (active) Theme.KNOB else Theme.KNOB_DISABLED
 
         val knobSize = height - KNOB_INSET * 2
         val knobX = if (checked) x + width - KNOB_INSET - knobSize else x + KNOB_INSET
-        graphics.fill(
-            knobX,
-            y + KNOB_INSET,
-            knobX + knobSize,
-            y + KNOB_INSET + knobSize,
-            if (active) KNOB else KNOB_DISABLED,
+
+        nvgSurface(
+            graphics, x, y, width, height,
+            nvg = {
+                val left = x.toFloat()
+                val top = y.toFloat()
+                val w = width.toFloat()
+                val h = height.toFloat()
+                // A pill, not the panel radius: the knob is round, and a 3px corner beside it reads as
+                // a rounded box with a circle rattling inside it.
+                val radius = h / 2f
+
+                NVGUtils.drawRect(left, top, w, h, radius, Theme.c(track))
+                if (hovered) NVGUtils.drawRect(left, top, w, h, radius, Theme.c(Theme.HOVER_TINT))
+                NVGUtils.drawOutlineRect(
+                    left + Theme.OUTLINE_INSET,
+                    top + Theme.OUTLINE_INSET,
+                    w - Theme.OUTLINE_THICKNESS,
+                    h - Theme.OUTLINE_THICKNESS,
+                    radius,
+                    Theme.OUTLINE_THICKNESS,
+                    Theme.c(outline),
+                )
+                NVGUtils.drawCircle(
+                    knobX + knobSize / 2f,
+                    top + h / 2f,
+                    knobSize / 2f,
+                    Theme.c(knob),
+                )
+            },
+            vanilla = {
+                graphics.fill(x, y, x + width, y + height, track)
+                if (hovered) graphics.fill(x, y, x + width, y + height, Theme.HOVER_TINT)
+                graphics.outline(x, y, width, height, outline)
+                graphics.fill(knobX, y + KNOB_INSET, knobX + knobSize, y + KNOB_INSET + knobSize, knob)
+            },
         )
     }
 

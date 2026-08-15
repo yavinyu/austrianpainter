@@ -1,5 +1,8 @@
 package com.maxisch.client.gui.widget
 
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.NVGUtils
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
@@ -29,13 +32,11 @@ class StepperWidget(
 
     private companion object {
         const val ZONE_WIDTH = 16
-        const val TRACK = 0x60000000
-        const val ZONE_HOVER = 0x50FFFFFF
-        const val OUTLINE = 0xFFFFFFFF.toInt()
-        const val TEXT = 0xFFFFFFFF.toInt()
-        const val TEXT_DIM = 0xFF808080.toInt()
-        val MINUS: Component = Component.literal("-")
-        val PLUS: Component = Component.literal("+")
+
+        // Chevrons, as the shell draws them. A hyphen and a plus read as arithmetic on the value;
+        // these read as "step to the previous/next one", which is what the control does.
+        val MINUS: Component = Component.literal("‹")
+        val PLUS: Component = Component.literal("›")
     }
 
     private val font get() = Minecraft.getInstance().font
@@ -61,22 +62,81 @@ class StepperWidget(
         mouseY: Int,
         partialTick: Float,
     ) {
-        graphics.fill(x, y, x + width, y + height, TRACK)
-        graphics.outline(x, y, width, height, OUTLINE)
+        val hoveredMinus = value > min && mouseX in x..(x + ZONE_WIDTH) && mouseY in y..(y + height)
+        val hoveredPlus = value < max &&
+            mouseX in (x + width - ZONE_WIDTH)..(x + width) && mouseY in y..(y + height)
 
-        val hoveredMinus = mouseX in x..(x + ZONE_WIDTH) && mouseY in y..(y + height)
-        val hoveredPlus = mouseX in (x + width - ZONE_WIDTH)..(x + width) && mouseY in y..(y + height)
-        if (value > min && hoveredMinus) graphics.fill(x, y, x + ZONE_WIDTH, y + height, ZONE_HOVER)
-        if (value < max && hoveredPlus) {
-            graphics.fill(x + width - ZONE_WIDTH, y, x + width, y + height, ZONE_HOVER)
-        }
+        nvgSurface(
+            graphics, x, y, width, height,
+            nvg = {
+                val left = x.toFloat()
+                val top = y.toFloat()
+                val w = width.toFloat()
+                val h = height.toFloat()
+                val zone = ZONE_WIDTH.toFloat()
 
-        val minusColor = if (value > min) TEXT else TEXT_DIM
-        val plusColor = if (value < max) TEXT else TEXT_DIM
+                NVGUtils.drawRect(left, top, w, h, Theme.RADIUS, Theme.c(Theme.TRACK))
+
+                // Each end's hover is the track's own rounded shape clipped to that end, so the
+                // outer corners stay round while the inner edge stays a straight cut.
+                val hover = Theme.c(Theme.ZONE_HOVER)
+                if (hoveredMinus) {
+                    NVGUtils.pushScissor(left, top, zone, h)
+                    NVGUtils.drawRect(left, top, w, h, Theme.RADIUS, hover)
+                    NVGUtils.popScissor()
+                }
+                if (hoveredPlus) {
+                    NVGUtils.pushScissor(left + w - zone, top, zone, h)
+                    NVGUtils.drawRect(left, top, w, h, Theme.RADIUS, hover)
+                    NVGUtils.popScissor()
+                }
+
+                NVGUtils.drawOutlineRect(
+                    left + Theme.OUTLINE_INSET,
+                    top + Theme.OUTLINE_INSET,
+                    w - Theme.OUTLINE_THICKNESS,
+                    h - Theme.OUTLINE_THICKNESS,
+                    Theme.RADIUS,
+                    Theme.OUTLINE_THICKNESS,
+                    Theme.c(Theme.OUTLINE),
+                )
+            },
+            vanilla = {
+                graphics.fill(x, y, x + width, y + height, Theme.TRACK)
+                graphics.outline(x, y, width, height, Theme.OUTLINE)
+                if (hoveredMinus) graphics.fill(x, y, x + ZONE_WIDTH, y + height, Theme.ZONE_HOVER)
+                if (hoveredPlus) {
+                    graphics.fill(x + width - ZONE_WIDTH, y, x + width, y + height, Theme.ZONE_HOVER)
+                }
+            },
+        )
+
+        val minusColor = if (value > min) Theme.TEXT else Theme.TEXT_DIM
+        val plusColor = if (value < max) Theme.TEXT else Theme.TEXT_DIM
         val textY = y + height / 2 - 4
-        graphics.text(font, MINUS, x + ZONE_WIDTH / 2 - 2, textY, minusColor)
-        graphics.text(font, PLUS, x + width - ZONE_WIDTH / 2 - 2, textY, plusColor)
-        graphics.centeredText(font, format(value), x + width / 2, textY, TEXT)
+        val minusX = x + ZONE_WIDTH / 2 - 2
+        val plusX = x + width - ZONE_WIDTH / 2 - 2
+
+        nvgSurface(
+            graphics, x, y, width, height,
+            nvg = {
+                NVGUtils.drawText(MINUS.string, minusX.toFloat(), textY.toFloat(), Theme.TEXT_SIZE, Theme.c(minusColor), Theme.body)
+                NVGUtils.drawText(PLUS.string, plusX.toFloat(), textY.toFloat(), Theme.TEXT_SIZE, Theme.c(plusColor), Theme.body)
+                NVGUtils.drawCenteredText(
+                    format(value).string,
+                    (x + width / 2).toFloat(),
+                    textY.toFloat(),
+                    Theme.TEXT_SIZE,
+                    Theme.c(Theme.TEXT),
+                    Theme.body,
+                )
+            },
+            vanilla = {
+                graphics.text(font, MINUS, minusX, textY, minusColor)
+                graphics.text(font, PLUS, plusX, textY, plusColor)
+                graphics.centeredText(font, format(value), x + width / 2, textY, Theme.TEXT)
+            },
+        )
     }
 
     override fun updateWidgetNarration(output: NarrationElementOutput) = Unit

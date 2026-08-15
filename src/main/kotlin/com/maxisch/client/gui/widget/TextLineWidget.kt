@@ -1,5 +1,8 @@
 package com.maxisch.client.gui.widget
 
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.NVGUtils
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
@@ -23,6 +26,24 @@ class TextLineWidget(
 
     companion object {
         const val HEIGHT = 10
+
+        /**
+         * NanoVG is told to align text from its top, as vanilla does, but Josefin carries more
+         * leading above its caps than Minecraft's bitmap font. Without this the line sits visibly
+         * lower than the vanilla widgets it shares a row with.
+         */
+        const val BASELINE_NUDGE = -1f
+    }
+
+    init {
+        // Decorative, so invisible to hit-testing - see PanelWidget. A label is laid out at its
+        // panel's full inner width, so where it shares a row with a control it would otherwise eat
+        // the top HEIGHT pixels of that control's clicks.
+        //
+        // The cost is that an inactive widget is skipped by focus traversal and by narration, so
+        // updateWidgetNarration below no longer speaks. These are static labels whose text the
+        // control beside them also carries, which is the only reason that is acceptable.
+        active = false
     }
 
     override fun extractWidgetRenderState(
@@ -31,7 +52,23 @@ class TextLineWidget(
         mouseY: Int,
         partialTick: Float,
     ) {
-        graphics.text(Minecraft.getInstance().font, message, x, y, color)
+        nvgSurface(
+            graphics, x, y, width, HEIGHT,
+            nvg = {
+                // `message.string` flattens any styling the component carries. These lines are all
+                // plain translatables coloured by [color], so there is none to lose - a widget that
+                // does carry styling must stay vanilla rather than come through here.
+                NVGUtils.drawText(
+                    message.string,
+                    x.toFloat(),
+                    y.toFloat() + BASELINE_NUDGE,
+                    Theme.TEXT_SIZE,
+                    Theme.c(color),
+                    Theme.body,
+                )
+            },
+            vanilla = { graphics.text(Minecraft.getInstance().font, message, x, y, color) },
+        )
     }
 
     override fun updateWidgetNarration(output: NarrationElementOutput) {
