@@ -67,6 +67,7 @@ class CardWidget(
                     Theme.TEXT_SIZE_SMALL,
                     Theme.c(Theme.DIM),
                     Theme.body,
+                    Theme.LABEL_TRACKING,
                 )
                 trailing?.let {
                     val trailingWidth = Theme.textWidth(it, Theme.TEXT_SIZE_SMALL)

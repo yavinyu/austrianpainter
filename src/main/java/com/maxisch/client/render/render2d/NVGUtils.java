@@ -468,12 +468,26 @@ public final class NVGUtils {
 	// ------------------------------------------------------------------ text
 
 	public static void drawText(String text, float x, float y, float size, Colour colour, NvgFont font) {
+		drawText(text, x, y, size, colour, font, 0f);
+	}
+
+	/**
+	 * As above, with tracking.
+	 *
+	 * <p>The shell's uppercase labels are letterspaced - uppercase set solid reads as a block rather
+	 * than as words, which is why every design that uses small caps for labels opens them up. NanoVG
+	 * carries the spacing in its state, so it is reset afterwards or it would leak into the next
+	 * string drawn in this frame.
+	 */
+	public static void drawText(String text, float x, float y, float size, Colour colour, NvgFont font, float letterSpacing) {
 		nvgFontSize(vg, size);
 		nvgFontFaceId(vg, getFontID(font));
+		nvgTextLetterSpacing(vg, letterSpacing);
 		colour(colour);
 		nvgBeginPath(vg);
 		nvgFillColor(vg, nvgColor);
 		nvgText(vg, x, y, text);
+		nvgTextLetterSpacing(vg, 0f);
 	}
 
 	public static void drawCenteredText(String text, float x, float y, float size, Colour colour, NvgFont font) {
@@ -516,12 +530,20 @@ public final class NVGUtils {
 	 * layout that positions a NanoVG-drawn string must measure it with this and never mix the two.
 	 */
 	public static float getTextWidth(String text, float size, NvgFont font) {
+		return getTextWidth(text, size, font, 0f);
+	}
+
+	/** Measured with the same tracking it will be drawn at, or the two disagree by a pixel a letter. */
+	public static float getTextWidth(String text, float size, NvgFont font, float letterSpacing) {
 		if (!isReady()) {
 			return 0f;
 		}
 		nvgFontSize(vg, size);
 		nvgFontFaceId(vg, getFontID(font));
-		return nvgTextBounds(vg, 0f, 0f, text, fontBounds);
+		nvgTextLetterSpacing(vg, letterSpacing);
+		float width = nvgTextBounds(vg, 0f, 0f, text, fontBounds);
+		nvgTextLetterSpacing(vg, 0f);
+		return width;
 	}
 
 	public static float getTextHeight(String content, float size, NvgFont font) {
