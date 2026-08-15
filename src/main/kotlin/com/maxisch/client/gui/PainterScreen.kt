@@ -1,6 +1,8 @@
 package com.maxisch.client.gui
 
 import com.maxisch.client.KeyHints
+import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.ToolRailWidget
 import com.maxisch.client.gui.tab.ApTab
 import com.maxisch.client.gui.tab.AreaTab
 import com.maxisch.client.gui.tab.BrushTab
@@ -8,18 +10,17 @@ import com.maxisch.client.gui.tab.DungeonTab
 import com.maxisch.client.gui.tab.HistoryTab
 import com.maxisch.client.gui.tab.PresetsTab
 import com.maxisch.client.gui.tab.SettingsTab
+import com.maxisch.paint.PaintSession
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.PresetKind
+import com.maxisch.paint.session.PaintArea
+import com.maxisch.paint.session.PaintBrush
 import com.maxisch.paint.session.PaintSelection
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
-import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.tabs.Tab
 import net.minecraft.client.gui.components.tabs.TabManager
-import net.minecraft.client.gui.components.tabs.TabNavigationBar
-import net.minecraft.client.gui.layouts.HeaderAndFooterLayout
-import net.minecraft.client.gui.layouts.LinearLayout
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.core.BlockPos
@@ -49,12 +50,15 @@ class PainterScreen private constructor(parent: Screen?) :
     }
 
     companion object {
-        private const val MARGIN = 8
-        private const val STATUS_HEIGHT = 14
-        private const val STATUS_COLOR = 0xFFFFFF55.toInt()
-
         /** How long a status line stays up before it fades out on its own. */
         private const val STATUS_MS = 6_000L
+
+        private const val BUTTON_WIDTH = 64
+        private const val BUTTON_HEIGHT = 20
+        private const val BUTTON_GAP = 6
+
+        /** Pixels per wheel notch when a tab is taller than its area. */
+        private const val SCROLL_STEP = 16
 
         /**
          * Survives a round trip through the block picker, so choosing a donor from the area tab
@@ -75,7 +79,6 @@ class PainterScreen private constructor(parent: Screen?) :
         }
     }
 
-    private val layout = HeaderAndFooterLayout(this)
     // The enter/exit consumers are called with null when there is no tab on that side of the
     // switch - the very first selectTab has nothing to exit - so both parameters must be nullable.
     private val tabManager = TabManager(
@@ -85,10 +88,15 @@ class PainterScreen private constructor(parent: Screen?) :
         { tab: Tab? -> (tab as? ApTab)?.onHidden() },
     )
 
-    private var tabBar: TabNavigationBar? = null
+    private var frame: PainterFrame? = null
+
+    /** The bar and footer, drawn over the tabs so scrolled content slides under them. */
+    private var chrome: PainterFrame? = null
+    private var rail: ToolRailWidget? = null
     private var tabs: List<ApTab> = emptyList()
-    private var undoButton: Button? = null
-    private var redoButton: Button? = null
+    private var footerButtons: List<ActButtonWidget> = emptyList()
+    private var undoButton: ActButtonWidget? = null
+    private var redoButton: ActButtonWidget? = null
 
     /**
      * Captured once when the screen opens: the crosshair freezes the moment any screen is up, so
@@ -154,46 +162,105 @@ class PainterScreen private constructor(parent: Screen?) :
             SettingsTab(this),
         )
 
-        val bar = TabNavigationBar.builder(tabManager, width)
-            .addTabs(*tabs.toTypedArray<Tab>())
-            .build()
-        tabBar = addRenderableWidget(bar)
-
-        val footer = layout.addToFooter(LinearLayout.horizontal().spacing(8))
-        undoButton = footer.addChild(
-            Button.builder(undoLabel()) {
-                status(PaintStorage.undo())
-                refreshTabs()
-            }
-                .width(100)
-                .tooltip(KeyHints.undoTooltip())
-                .build(),
-        )
-        redoButton = footer.addChild(
-            Button.builder(redoLabel()) {
-                status(PaintStorage.redo())
-                refreshTabs()
-            }
-                .width(100)
-                .tooltip(KeyHints.redoTooltip())
-                .build(),
-        )
-        footer.addChild(
-            Button.builder(Component.translatable("austrianpainter.settings")) {
-                tabBar?.selectTab(TabId.SETTINGS.ordinal, true)
-            }.width(100).build(),
-        )
-        footer.addChild(
-            Button.builder(Component.translatable("gui.done")) { onClose() }.width(100).build(),
+        // Registration order is render order, and the frame is the ground everything else sits on.
+        frame = addRenderableWidget(PainterFrame(part = PainterFrame.Part.GROUND))
+        rail = addRenderableWidget(
+            ToolRailWidget(
+                titles = tabs.map { it.tabTitle },
+                counts = railCounts(),
+                selectedIndex = { tabs.indexOf(tabManager.currentTab) },
+                onSelect = { index -> selectTab(index, true) },
+            ),
         )
 
-        layout.visitWidgets { widget: AbstractWidget -> addRenderableWidget(widget) }
-        bar.selectTab(lastTab.ordinal, false)
+        val undo = ActButtonWidget(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, undoLabel(), ActButtonWidget.Variant.DEFAULT) {
+            status(PaintStorage.undo())
+            refreshTabs()
+        }
+        undo.setTooltip(KeyHints.undoTooltip())
+        val redo = ActButtonWidget(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, redoLabel(), ActButtonWidget.Variant.DEFAULT) {
+            status(PaintStorage.redo())
+            refreshTabs()
+        }
+        redo.setTooltip(KeyHints.redoTooltip())
+        val done = ActButtonWidget(
+            0,
+            0,
+            BUTTON_WIDTH,
+            BUTTON_HEIGHT,
+            Component.translatable("gui.done"),
+            ActButtonWidget.Variant.PRIMARY,
+        ) { onClose() }
+
+        undoButton = undo
+        redoButton = redo
+        // Right to left, so the primary action is the one against the screen edge.
+        footerButtons = listOf(done, redo, undo)
+
+        chrome = PainterFrame(part = PainterFrame.Part.CHROME, status = { visibleStatus() })
+        raiseChrome()
+
+        selectTab(lastTab.ordinal, false)
         refreshUndoButton()
         repositionElements()
     }
 
+    /**
+     * What each rail row reports under its name, in [TabId] order.
+     *
+     * Only what is already cheap to read every frame: a tool whose state has no one-number summary
+     * shows nothing rather than something invented, which is why two of the six are null.
+     */
+    private fun railCounts(): List<() -> String?> = listOf(
+        { PaintBrush.donor?.let { "r${PaintBrush.radius}" } },
+        { if (PaintArea.complete) abbreviated(PaintArea.volume()) else null },
+        { PaintSession.scope?.key?.takeIf { it.isNotBlank() } },
+        { null },
+        { PaintStorage.undoDepth.takeIf { it > 0 }?.toString() },
+        { null },
+    )
+
+    /** 1_248 as "1.2k": the rail column is 116px and a raw block count does not fit. */
+    private fun abbreviated(count: Long): String = when {
+        count >= 1_000_000 -> "%.1fM".format(count / 1_000_000.0)
+        count >= 1_000 -> "%.1fk".format(count / 1_000.0)
+        else -> count.toString()
+    }
+
+    /** The settings tab is reachable from the rail, so the footer no longer carries a button for it. */
+    private fun selectTab(index: Int, playSound: Boolean) {
+        tabs.getOrNull(index)?.let { tabManager.setCurrentTab(it, playSound) }
+    }
+
+    /** The status line, or null once it has timed out. Clearing it here keeps the render pass pure. */
+    private fun visibleStatus(): Component? {
+        val message = statusText ?: return null
+        if (System.currentTimeMillis() > statusUntil) {
+            statusText = null
+            return null
+        }
+        return message
+    }
+
+    /**
+     * Moves the frame's chrome and the footer buttons to the end of the render order.
+     *
+     * A tab's widgets are registered when it is entered, which puts them after everything already
+     * there. Without this the bar and the footer would sit under them, and a scrolled tab would run
+     * its content straight over the top of the frame instead of under it.
+     */
+    private fun raiseChrome() {
+        val bar = chrome ?: return
+        removeWidget(bar)
+        addRenderableWidget(bar)
+        footerButtons.forEach {
+            removeWidget(it)
+            addRenderableWidget(it)
+        }
+    }
+
     private fun onTabEntered(tab: Tab) {
+        raiseChrome()
         val index = tabs.indexOf(tab)
         if (index >= 0) lastTab = TabId.entries[index]
         (tab as? ApTab)?.refresh()
@@ -202,23 +269,61 @@ class PainterScreen private constructor(parent: Screen?) :
     /** For the Settings tab's "Manage..." buttons: jump to Presets already on the right kind. */
     fun switchToPresets(kind: PresetKind) {
         (tabs.firstOrNull { it is PresetsTab } as? PresetsTab)?.selectKind(kind)
-        tabBar?.selectTab(TabId.PRESETS.ordinal, true)
+        selectTab(TabId.PRESETS.ordinal, true)
     }
 
     override fun repositionElements() {
-        val bar = tabBar ?: return
-        bar.updateWidth(width)
-        val top = bar.rectangle.bottom()
-        // The status line sits between the content and the footer, so the content stops short of it.
-        val bottom = height - layout.footerHeight - STATUS_HEIGHT
-        tabManager.setTabArea(ScreenRectangle(0, top, width, (bottom - top).coerceAtLeast(0)))
-        layout.setHeaderHeight(top)
-        layout.arrangeElements()
+        val frameWidget = frame ?: return
+        // Before anything is placed: every tab's doLayout reads the frame's heights off this.
+        PainterFrame.measure(height)
+        listOfNotNull(frameWidget, chrome).forEach {
+            it.setPosition(0, 0)
+            it.width = width
+            it.height = height
+        }
+
+        val top = PainterFrame.ARMED_HEIGHT
+        val footerTop = frameWidget.footerTop(height)
+        val contentHeight = (footerTop - top).coerceAtLeast(0)
+
+        rail?.let {
+            it.setPosition(0, top)
+            it.height = contentHeight
+        }
+
+        // The status line lives on the footer strip now, so the content runs all the way down to it.
+        tabManager.setTabArea(
+            ScreenRectangle(
+                ToolRailWidget.WIDTH,
+                top,
+                (width - ToolRailWidget.WIDTH).coerceAtLeast(0),
+                contentHeight,
+            ),
+        )
+
+        var buttonX = width - PainterFrame.PAD_X
+        footerButtons.forEach { button ->
+            buttonX -= button.width
+            button.setPosition(buttonX, footerTop + (PainterFrame.FOOTER_HEIGHT - button.height) / 2)
+            buttonX -= BUTTON_GAP
+        }
     }
 
     override fun tick() {
         super.tick()
         (tabManager.currentTab as? ApTab)?.tick()
+    }
+
+    /**
+     * Scrolls the visible tab when nothing under the cursor wanted the wheel.
+     *
+     * Lists claim it first - a wheel over a row list scrolls that list, which is what the hand
+     * expects - so this only ever fires over the gaps between them.
+     */
+    override fun mouseScrolled(mouseX: Double, mouseY: Double, scrollX: Double, scrollY: Double): Boolean {
+        if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) return true
+        val tab = tabManager.currentTab as? ApTab ?: return false
+        return tab.scrollBy((-scrollY * SCROLL_STEP).toInt())
     }
 
     /** Closing the screen doesn't go through a tab switch, so the visible tab never otherwise gets
@@ -228,14 +333,4 @@ class PainterScreen private constructor(parent: Screen?) :
         super.onClose()
     }
 
-    override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTick)
-
-        val message = statusText ?: return
-        if (System.currentTimeMillis() > statusUntil) {
-            statusText = null
-            return
-        }
-        graphics.text(font, message, MARGIN, height - layout.footerHeight - STATUS_HEIGHT + 2, STATUS_COLOR)
-    }
 }
