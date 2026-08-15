@@ -33,8 +33,63 @@ abstract class ApTab(private val titleKey: String) : Tab {
         return widget
     }
 
+    private var scrollOffset = 0
+    private var maxScroll = 0
+    private var lastArea: ScreenRectangle? = null
+
+    /**
+     * Applies the tab's own scroll before handing the area to [layout].
+     *
+     * Settings needs more height than the screen has at GUI scale 3, and it is not the only tab that
+     * can: any of them overflow on a short enough window. Rather than every tab growing its own
+     * scroll handling, the area they lay out into is simply shifted up and made taller, and the
+     * frame's chrome is drawn over the top and bottom so the overflow slides under it.
+     */
+    final override fun doLayout(area: ScreenRectangle) {
+        lastArea = area
+        arrange(area)
+    }
+
+    private fun arrange(area: ScreenRectangle) {
+        layout(shifted(area))
+
+        // Widgets are already shifted, so the unscrolled bottom is their lowest edge plus whatever
+        // was scrolled away above them.
+        val bottom = widgets.filter { it.visible }.maxOfOrNull { it.y + it.height } ?: area.bottom()
+        maxScroll = (bottom + scrollOffset - area.bottom()).coerceAtLeast(0)
+
+        // A tab can shrink - a list empties, a section hides - and leave the offset past the end.
+        if (scrollOffset > maxScroll) {
+            scrollOffset = maxScroll
+            layout(shifted(area))
+        }
+    }
+
+    private fun shifted(area: ScreenRectangle): ScreenRectangle = ScreenRectangle(
+        area.left(),
+        area.top() - scrollOffset,
+        area.width(),
+        area.height() + scrollOffset,
+    )
+
+    /**
+     * Scrolls by [delta] pixels, returning whether anything moved.
+     *
+     * False means the tab fits, which is the screen's cue to leave the event alone.
+     */
+    fun scrollBy(delta: Int): Boolean {
+        val next = (scrollOffset + delta).coerceIn(0, maxScroll)
+        if (next == scrollOffset) return false
+        scrollOffset = next
+        lastArea?.let { arrange(it) }
+        return true
+    }
+
+    /** True when this tab has more content than its area, so the screen knows a wheel means scroll. */
+    fun canScroll(): Boolean = maxScroll > 0
+
     /** Positions the already-built widgets inside the area the tab was given. */
-    abstract override fun doLayout(area: ScreenRectangle)
+    abstract fun layout(area: ScreenRectangle)
 
     /** Called once a tick while this tab is the visible one. */
     open fun tick() = Unit
