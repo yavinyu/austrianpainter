@@ -197,7 +197,15 @@ class PainterFrame(
         val wordmark = Component.translatable("austrianpainter.frame.wordmark")
         val subtitle = Component.literal(ApSettings.activePalette)
 
-        var cursor = PAD_X + maxOf(font.width(wordmark), font.width(subtitle)) + SLOT_GAP
+        // Measured with the renderer that draws them, tracking included: mixing NanoVG text with
+        // Font.width puts every separator a few pixels off, and the error compounds along the bar.
+        fun labelWidth(text: Component) =
+            Theme.textWidth(text.string, Theme.TEXT_SIZE_SMALL, tracking = Theme.LABEL_TRACKING)
+
+        fun valueWidth(text: Component) = Theme.textWidth(text.string)
+
+        var cursor = PAD_X +
+            maxOf(Theme.textWidth(wordmark.string, Theme.TEXT_SIZE_LARGE), labelWidth(subtitle)).toInt() + SLOT_GAP
         val slots = mutableListOf<Slot>()
         val separators = mutableListOf<Int>()
 
@@ -206,7 +214,7 @@ class PainterFrame(
             cursor += SLOT_GAP
             val chipWidth = if (chip) CHIP + 6 else 0
             slots += Slot(cursor, label, value, valueColour, chip)
-            cursor += chipWidth + maxOf(font.width(label), font.width(value)) + SLOT_GAP
+            cursor += chipWidth + maxOf(labelWidth(label), valueWidth(value)).toInt() + SLOT_GAP
         }
 
         slot(
@@ -224,8 +232,8 @@ class PainterFrame(
 
         val keyPill = KeyHints.name(PaintKeys.openMenuKey)
         val statePill = armedPill()
-        val keyPillWidth = font.width(keyPill) + PILL_PAD_X * 2
-        val statePillWidth = font.width(statePill) + PILL_PAD_X * 2
+        val keyPillWidth = labelWidth(keyPill).toInt() + PILL_PAD_X * 2
+        val statePillWidth = labelWidth(statePill).toInt() + PILL_PAD_X * 2
         val keyPillX = screenWidth - PAD_X - keyPillWidth
         val statePillX = keyPillX - PILL_GAP - statePillWidth
         val pillY = (ARMED_HEIGHT - PILL_HEIGHT) / 2
@@ -301,7 +309,7 @@ class PainterFrame(
         nvgSurface(
             graphics, 0, 0, screenWidth, ARMED_HEIGHT,
             nvg = {
-                text(wordmark, PAD_X, LABEL_Y, Theme.INK)
+                text(wordmark, PAD_X, LABEL_Y - 2, Theme.INK, Theme.TEXT_SIZE_LARGE)
                 text(subtitle, PAD_X, VALUE_Y, Theme.DIM, Theme.TEXT_SIZE_SMALL)
                 slots.forEach { slotEntry ->
                     val textX = slotEntry.x + if (slotEntry.chip) CHIP + 6 else 0
@@ -331,9 +339,15 @@ class PainterFrame(
         }
     }
 
-    /** One NanoVG string, in the frame's own type scale. */
+    /**
+     * One NanoVG string, in the frame's own type scale.
+     *
+     * Anything at [Theme.TEXT_SIZE_SMALL] here is an uppercase label - DONOR, SCOPE, the pills - so
+     * it gets the tracking automatically rather than every call site remembering.
+     */
     private fun text(message: Component, x: Int, y: Int, colour: Int, size: Float = Theme.TEXT_SIZE) {
-        NVGUtils.drawText(message.string, x.toFloat(), y.toFloat(), size, Theme.c(colour), Theme.body)
+        val tracking = if (size == Theme.TEXT_SIZE_SMALL) Theme.LABEL_TRACKING else 0f
+        NVGUtils.drawText(message.string, x.toFloat(), y.toFloat(), size, Theme.c(colour), Theme.body, tracking)
     }
 
     /** A rounded outline chip; [live] gives it the green the armed state uses. */

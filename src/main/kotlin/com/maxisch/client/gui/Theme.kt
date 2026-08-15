@@ -124,6 +124,18 @@ object Theme {
     /** Labels above a value, and anything else that must not compete with what it describes. */
     const val TEXT_SIZE_SMALL = 9f
 
+    /** The wordmark and a card's own title - the only text allowed to be bigger than a value. */
+    const val TEXT_SIZE_LARGE = 13f
+
+    /**
+     * Tracking for the uppercase labels: card headers, the armed bar's slot labels, the pills.
+     *
+     * Uppercase set solid reads as a block rather than as words. Every design that uses small caps
+     * for labels opens them up, the mockup included, and it is most of why its labels look
+     * deliberate where an unspaced copy looks like shouting.
+     */
+    const val LABEL_TRACKING = 0.8f
+
     /**
      * Advance width of [text], in GUI pixels.
      *
@@ -132,9 +144,9 @@ object Theme {
      * places. Falls back to vanilla's metric when NanoVG is unavailable, which is correct precisely
      * because the widget will then be drawing with vanilla too.
      */
-    fun textWidth(text: String, size: Float = TEXT_SIZE, font: NvgFont? = null): Float =
+    fun textWidth(text: String, size: Float = TEXT_SIZE, font: NvgFont? = null, tracking: Float = 0f): Float =
         if (NVGUtils.isReady()) {
-            NVGUtils.getTextWidth(text, size, font ?: body)
+            NVGUtils.getTextWidth(text, size, font ?: body, tracking)
         } else {
             Minecraft.getInstance().font.width(text).toFloat()
         }
