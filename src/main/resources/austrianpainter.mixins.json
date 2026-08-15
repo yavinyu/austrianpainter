@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "client.EntityMixin",
+    "client.GuiGraphicsExtractorAccessor",
     "client.LevelEventHandlerMixin",
     "client.MouseHandlerMixin"
   ],

@@ -362,4 +362,13 @@ The F7 device column feature takes its idea and its coordinates from NoammAddons
 `setBlock` on a tick loop, whereas this evaluates a paint rule while the chunk bakes, so the colour
 follows a moving pillar without the mod ever touching a block.
 
-MIT licensed; see `LICENSE.txt`.
+The paint menu draws through a NanoVG renderer ported from [rsm](https://github.com/rs-mod/rsm)
+(BSD-3-Clause), parts of which rsm in turn derives from
+[OdinFabric](https://github.com/odtheking/OdinFabric). Only the renderer came across — the drawing
+primitives, the font handling and the picture-in-picture bridge that gets NanoVG into Minecraft's
+GUI pass. rsm's module and settings framework did not: this mod's tabs are workflows rather than a
+list of toggles, so its click-GUI shell has nothing to describe here. The bundled Josefin Sans is
+SIL OFL 1.1.
+
+MIT licensed; see `LICENSE.txt`. Bundled third-party code and fonts keep their own licences — see
+`THIRD-PARTY-NOTICES.txt`.

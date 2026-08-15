@@ -1,0 +1,100 @@
+THIRD-PARTY NOTICES
+===================
+
+Austrian Painter is released under the MIT License (see LICENSE.txt). It bundles
+the third-party material listed below, each under its own terms. Nothing here
+changes the licence of the rest of the project.
+
+
+-------------------------------------------------------------------------------
+1. NanoVG 2D renderer  --  BSD 3-Clause License
+-------------------------------------------------------------------------------
+
+Files covered:
+
+    src/main/java/com/maxisch/client/render/render2d/NVGUtils.java
+    src/main/java/com/maxisch/client/render/render2d/NvgBridge.java
+    src/main/java/com/maxisch/client/render/render2d/NvgFont.java
+    src/main/java/com/maxisch/client/render/render2d/Gradient.java
+
+Derived from:
+
+    rs-mod/rsm  --  https://github.com/rs-mod/rsm
+      src/main/java/com/ricedotwho/rsm/render/render2d/NVGUtils.java
+      src/main/java/com/ricedotwho/rsm/render/render2d/NVGSpecialRenderer.java
+      src/main/java/com/ricedotwho/rsm/render/render2d/Font.java
+      src/main/java/com/ricedotwho/rsm/render/render2d/Gradient.java
+
+NVGUtils.java is additionally derived, in part, from:
+
+    OdinFabric  --  https://github.com/odtheking/OdinFabric
+      src/main/kotlin/com/odtheking/odin/utils/ui/rendering/NVGRenderer.kt
+
+Copyright (c) 2026, rice.who
+Copyright (c) 2026, odtheking
+
+Changes made: Lombok annotations written out by hand; image, GIF and Pair
+support removed; NanoVG context and font creation made lazy; the font set
+trimmed and moved to the austrianpainter namespace; the GUI-scale source
+replaced; framebuffer caching, clearing and GL state restore added; the clip
+rectangle made an explicit parameter; a vanilla fallback added when NanoVG is
+unavailable.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+-------------------------------------------------------------------------------
+2. Josefin Sans  --  SIL Open Font License, Version 1.1
+-------------------------------------------------------------------------------
+
+Files covered:
+
+    src/main/resources/assets/austrianpainter/font/josefin.ttf
+    src/main/resources/assets/austrianpainter/font/josefin-bold.ttf
+
+Copyright 2010 The Josefin Sans Project Authors
+(https://github.com/ThomasJockin/JosefinSansFont-master),
+with Reserved Font Name "Josefin Sans".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The licence, with a FAQ, is available at: https://scripts.sil.org/OFL
+
+The fonts are bundled unmodified and under their original file names. The
+Reserved Font Name means any modified version must be renamed before
+redistribution.
+
+
+-------------------------------------------------------------------------------
+3. LWJGL NanoVG bindings  --  BSD 3-Clause License
+-------------------------------------------------------------------------------
+
+org.lwjgl:lwjgl-nanovg and its native libraries are bundled inside the released
+jar (jar-in-jar) rather than checked into this repository.
+
+Copyright (c) 2012-present Lightweight Java Game Library
+https://github.com/LWJGL/lwjgl3/blob/master/LICENSE.md
+
+NanoVG itself is copyright (c) 2013 Mikko Mononen, under the zlib licence.
