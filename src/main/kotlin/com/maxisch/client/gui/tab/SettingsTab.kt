@@ -1,8 +1,11 @@
 package com.maxisch.client.gui.tab
 
+import com.maxisch.client.gui.ColorPickerScreen
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.ColorSwatchWidget
-import com.maxisch.client.gui.widget.PanelWidget
+import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.StepperWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.client.gui.widget.ToggleSwitchWidget
@@ -17,6 +20,7 @@ import com.maxisch.paint.PresetStores
 import com.maxisch.paint.session.PaintBrush
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
+import com.maxisch.client.gui.widget.ApEditBox
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -43,16 +47,25 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
     private companion object {
         const val MARGIN = 8
-        const val GAP = 6
-        const val PAD = 6
-        const val ROW = 20
-        const val ROW_GAP = 6
+        const val GAP = 5
+        const val PAD = 5
+
+        /**
+         * This tab lays out five stacked panels and is the tallest in the mod - tall enough that it
+         * used to run past the bottom of its area even before the frame took a slice. These are the
+         * tightest values that keep a 14px toggle and a 20px button from touching their neighbours.
+         */
+        const val ROW = 18
+        const val ROW_GAP = 4
         const val TOGGLE_W = 30
         const val TOGGLE_H = 14
         const val SWATCH_W = 26
         const val SWATCH_H = 22
         const val OVERLAY_RADIUS_STEP = 2
         const val GREY = 0xFFA0A0A0.toInt()
+
+        /** Marks a hex field whose text cannot be parsed. */
+        val RED = Theme.RED
         const val WHITE = 0xFFFFFFFF.toInt()
 
         /** Matches the boss-dungeon purple [DungeonTab] already uses for its device-array accent. */
@@ -63,27 +76,11 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
     // ------------------------------------------------------------------ panels (added first - render order is add() order, and these must sit underneath everything else)
 
-    private val coloursPanel = add(PanelWidget(0, 0, 0, 0, ApSettings.areaOutlineColor))
-    private val generalPanel = add(PanelWidget(0, 0, 0, 0, GREY))
-    private val overlayPanel = add(PanelWidget(0, 0, 0, 0, ApSettings.paintedOverlayColor))
-    private val dungeonPanel = add(PanelWidget(0, 0, 0, 0, DUNGEON_ACCENT))
-    private val presetsPanel = add(PanelWidget(0, 0, 0, 0, GREY))
-
-    // ------------------------------------------------------------------ headers
-
-    private val coloursHeader = add(TextLineWidget(0, 0, 0, GREY))
-    private val generalHeader = add(TextLineWidget(0, 0, 0, GREY))
-    private val overlayHeader = add(TextLineWidget(0, 0, 0, GREY))
-    private val dungeonHeader = add(TextLineWidget(0, 0, 0, GREY))
-    private val presetsHeader = add(TextLineWidget(0, 0, 0, GREY))
-
-    init {
-        coloursHeader.message = Component.translatable("austrianpainter.settings.area")
-        generalHeader.message = Component.translatable("austrianpainter.settings.general")
-        overlayHeader.message = Component.translatable("austrianpainter.settings.overlay")
-        dungeonHeader.message = Component.translatable("austrianpainter.settings.dungeon")
-        presetsHeader.message = Component.translatable("austrianpainter.settings.presets")
-    }
+    private val coloursPanel = add(CardWidget(Component.translatable("austrianpainter.settings.area")))
+    private val generalPanel = add(CardWidget(Component.translatable("austrianpainter.settings.general")))
+    private val overlayPanel = add(CardWidget(Component.translatable("austrianpainter.settings.overlay")))
+    private val dungeonPanel = add(CardWidget(Component.translatable("austrianpainter.settings.dungeon")))
+    private val presetsPanel = add(CardWidget(Component.translatable("austrianpainter.settings.presets")))
 
     // ------------------------------------------------------------------ colours band
 
@@ -112,9 +109,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val overlayColorSwatch: ColorSwatchWidget
 
     init {
-        val (ob, os) = colorRow({ ApSettings.areaOutlineColor }, { ApSettings.areaOutlineColor = it }) {
-            coloursPanel.accent = it
-        }
+        val (ob, os) = colorRow({ ApSettings.areaOutlineColor }, { ApSettings.areaOutlineColor = it })
         outlineBox = ob
         outlineSwatch = os
         val (fb, fs) = colorRow({ ApSettings.areaFillColor }, { ApSettings.areaFillColor = it })
@@ -125,7 +120,6 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         previewSwatch = ps
         val (ocb, ocs) = colorRow({ ApSettings.paintedOverlayColor }, { ApSettings.paintedOverlayColor = it }) {
             PaintedOverlay.invalidate()
-            overlayPanel.accent = it
         }
         overlayColorBox = ocb
         overlayColorSwatch = ocs
@@ -137,19 +131,42 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
      */
     private fun colorRow(get: () -> Int, set: (Int) -> Unit, onChanged: (Int) -> Unit = {}): Pair<EditBox, ColorSwatchWidget> {
         val box = add(
-            EditBox(font, 0, 0, 90, 18, Component.translatable("austrianpainter.settings.hex_hint")).apply {
+            ApEditBox(font, 0, 0, 90, 18, Component.translatable("austrianpainter.settings.hex_hint")).apply {
                 setMaxLength(9)
                 setHint(Component.translatable("austrianpainter.settings.hex_hint"))
                 value = "%08X".format(get())
             },
         )
         val swatch = add(ColorSwatchWidget(0, 0, 16, 18, get()))
-        box.setResponder { text ->
-            val argb = text.trim().removePrefix("#").toUIntOrNull(16)?.toInt() ?: return@setResponder
+
+        /** Applies a colour everywhere it is mirrored, and persists it once. */
+        fun commit(argb: Int) {
             set(argb)
             ApSettings.save()
+            box.value = "%08X".format(argb)
             swatch.color = argb
             onChanged(argb)
+        }
+
+        box.setResponder { text ->
+            val argb = text.trim().removePrefix("#").toUIntOrNull(16)?.toInt()
+            // Colour the field rather than failing silently, and do not touch disk on every
+            // keystroke: eight digits used to mean up to eight full JSON writes. The value lands
+            // when the box loses focus or the picker commits.
+            box.setTextColor(if (argb == null) RED else WHITE)
+            if (argb != null) {
+                set(argb)
+                swatch.color = argb
+                onChanged(argb)
+            }
+        }
+
+        swatch.onPress = {
+            Minecraft.getInstance().setScreenAndShow(
+                ColorPickerScreen(screen, Component.translatable("austrianpainter.settings.pick_colour"), get()) {
+                    commit(it)
+                },
+            )
         }
         return box to swatch
     }
@@ -235,14 +252,14 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     }
 
     private val rescanButton = add(
-        Button.builder(Component.translatable("austrianpainter.settings.rescan")) { RoomTracker.reset() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.rescan")) { RoomTracker.reset() }
             .width(1)
             .tooltip(Tooltip.create(Component.translatable("austrianpainter.settings.rescan.desc")))
             .build(),
     )
 
     private val unbindTypesButton = add(
-        Button.builder(Component.translatable("austrianpainter.settings.unbind_room_types")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.unbind_room_types")) {
             PaintStorage.scope?.key?.let { ApSettings.bindRoomTypes(it, null) }
         }
             .width(1)
@@ -251,7 +268,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     )
 
     private val unbindBlocksButton = add(
-        Button.builder(Component.translatable("austrianpainter.settings.unbind_room_blocks")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.unbind_room_blocks")) {
             PaintStorage.scope?.let {
                 if (it.isBoss) ApSettings.bindBossPreset(it.key, null) else ApSettings.bindRoomPreset(it.key, null)
             }
@@ -262,7 +279,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     )
 
     private val unbindPalettesButton = add(
-        Button.builder(Component.translatable("austrianpainter.settings.unbind_room_palettes")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.unbind_room_palettes")) {
             PaintStorage.scope?.key?.let { ApSettings.bindRoomPalettes(it, null) }
         }
             .width(1)
@@ -275,11 +292,11 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val blocksLabel = add(TextLineWidget(0, 0, 0, GREY)).also {
         it.message = Component.translatable("austrianpainter.presets.blocks")
     }
-    private val blocksPrev = add(Button.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.blocks, PaintStorage::activateBlockPreset, -1) }.width(20).build())
+    private val blocksPrev = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.blocks, PaintStorage::activateBlockPreset, -1) }.width(20).build())
     private val blocksNameLine = add(TextLineWidget(0, 0, 0, WHITE))
-    private val blocksNext = add(Button.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.blocks, PaintStorage::activateBlockPreset, 1) }.width(20).build())
+    private val blocksNext = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.blocks, PaintStorage::activateBlockPreset, 1) }.width(20).build())
     private val blocksManage = add(
-        Button.builder(Component.translatable("austrianpainter.settings.manage_blocks")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.manage_blocks")) {
             screen.switchToPresets(PresetKind.BLOCKS)
         }.width(150).build(),
     )
@@ -287,11 +304,11 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val typesLabel = add(TextLineWidget(0, 0, 0, GREY)).also {
         it.message = Component.translatable("austrianpainter.presets.types")
     }
-    private val typesPrev = add(Button.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.types, PaintStorage::activateTypePreset, -1) }.width(20).build())
+    private val typesPrev = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.types, PaintStorage::activateTypePreset, -1) }.width(20).build())
     private val typesNameLine = add(TextLineWidget(0, 0, 0, WHITE))
-    private val typesNext = add(Button.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.types, PaintStorage::activateTypePreset, 1) }.width(20).build())
+    private val typesNext = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.types, PaintStorage::activateTypePreset, 1) }.width(20).build())
     private val typesManage = add(
-        Button.builder(Component.translatable("austrianpainter.settings.manage_types")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.manage_types")) {
             screen.switchToPresets(PresetKind.TYPES)
         }.width(150).build(),
     )
@@ -299,11 +316,11 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val palettesLabel = add(TextLineWidget(0, 0, 0, GREY)).also {
         it.message = Component.translatable("austrianpainter.presets.palettes")
     }
-    private val palettesPrev = add(Button.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.palettes, PaintStorage::activatePalette, -1) }.width(20).build())
+    private val palettesPrev = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.prev")) { stepPreset(PresetStores.palettes, PaintStorage::activatePalette, -1) }.width(20).build())
     private val palettesNameLine = add(TextLineWidget(0, 0, 0, WHITE))
-    private val palettesNext = add(Button.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.palettes, PaintStorage::activatePalette, 1) }.width(20).build())
+    private val palettesNext = add(ActButtonWidget.builder(Component.translatable("austrianpainter.presets.next")) { stepPreset(PresetStores.palettes, PaintStorage::activatePalette, 1) }.width(20).build())
     private val palettesManage = add(
-        Button.builder(Component.translatable("austrianpainter.settings.manage_palettes")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.manage_palettes")) {
             screen.switchToPresets(PresetKind.PALETTES)
         }.width(150).build(),
     )
@@ -313,9 +330,20 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         refresh()
     }
 
+    /**
+     * Persists whatever the hex fields typed.
+     *
+     * They edit [ApSettings] live so the swatch and the in-world outline track the text, but they no
+     * longer write to disk per keystroke - this is where those edits land. Every other control here
+     * saves as it goes, so a redundant save costs one JSON write on leaving the tab.
+     */
+    override fun onHidden() {
+        ApSettings.save()
+    }
+
     // ------------------------------------------------------------------ layout
 
-    override fun doLayout(area: ScreenRectangle) {
+    override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
         val top = area.top() + GAP
@@ -325,10 +353,9 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         val generalX = x + coloursWidth + GAP
 
         // -------------------------------------------------- colours panel content
-        var cy = top + PAD
+        var cy = top + CardWidget.HEADER_HEIGHT
         val coloursInner = coloursWidth - PAD * 2
-        coloursHeader.setRectangle(coloursInner, TextLineWidget.HEIGHT, x + PAD, cy)
-        cy += TextLineWidget.HEIGHT + ROW_GAP
+        // Card draws its own title; content starts below the header strip.
         val boxWidth = (coloursInner - SWATCH_W - 4).coerceAtLeast(40)
         for ((label, box, swatch) in listOf(
             Triple(outlineLabel, outlineBox, outlineSwatch),
@@ -345,10 +372,9 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         val coloursContentBottom = cy - ROW_GAP + PAD
 
         // -------------------------------------------------- general panel content
-        var gy = top + PAD
+        var gy = top + CardWidget.HEADER_HEIGHT
         val generalInner = generalWidth - PAD * 2
-        generalHeader.setRectangle(generalInner, TextLineWidget.HEIGHT, generalX + PAD, gy)
-        gy += TextLineWidget.HEIGHT + ROW_GAP
+        
         for ((toggle, label) in listOf(
             hudToggle to hudLabelLine,
             hintsToggle to hintsLabelLine,
@@ -382,10 +408,9 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         val rightWidth = contentWidth - halfWidth - GAP
         val dungeonX = x + halfWidth + GAP
 
-        var oy = bottomTop + PAD
+        var oy = bottomTop + CardWidget.HEADER_HEIGHT
         val overlayInner = halfWidth - PAD * 2
-        overlayHeader.setRectangle(overlayInner, TextLineWidget.HEIGHT, x + PAD, oy)
-        oy += TextLineWidget.HEIGHT + ROW_GAP
+        
         overlayToggle.setRectangle(TOGGLE_W, TOGGLE_H, x + PAD, oy + 3)
         overlayLabelLine.setRectangle(
             (overlayInner - TOGGLE_W - 4).coerceAtLeast(20),
@@ -398,10 +423,9 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         oy += ROW
         val overlayContentBottom = oy + PAD
 
-        var dy = bottomTop + PAD
+        var dy = bottomTop + CardWidget.HEADER_HEIGHT
         val dungeonInner = rightWidth - PAD * 2
-        dungeonHeader.setRectangle(dungeonInner, TextLineWidget.HEIGHT, dungeonX + PAD, dy)
-        dy += TextLineWidget.HEIGHT + ROW_GAP
+        
         roomScopeToggle.setRectangle(TOGGLE_W, TOGGLE_H, dungeonX + PAD, dy + 3)
         roomScopeLabelLine.setRectangle(
             (dungeonInner - TOGGLE_W - 4).coerceAtLeast(20),
@@ -422,12 +446,16 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
         // -------------------------------------------------- presets strip, full width below
         val presetsTop = bottomBandBottom + GAP
-        var py = presetsTop + PAD
-        presetsHeader.setRectangle(contentWidth - PAD * 2, TextLineWidget.HEIGHT, x + PAD, py)
-        py += TextLineWidget.HEIGHT + ROW_GAP
+        var py = presetsTop + CardWidget.HEADER_HEIGHT
+        
 
-        val labelWidth = 60
-        val nameWidth = (contentWidth - PAD * 2 - labelWidth - 20 * 2 - 150 - GAP * 4).coerceAtLeast(40)
+        // Measured, not guessed: "Block-type preset" and "Donor palette" are both wider than the 60
+        // this used to reserve, so the label ran underneath the ‹ button next to it.
+        val labelWidth = listOf(blocksLabel, typesLabel, palettesLabel)
+            .maxOf { Theme.textWidth(it.message.string).toInt() } + GAP
+        // Fixed, not stretched to fill: the ‹ › pair belongs against the name it steps through, and
+        // a name field spanning the card left the › stranded halfway across it.
+        val nameWidth = 120
         for ((label, prev, nameLine, next, manage) in listOf(
             PresetRow(blocksLabel, blocksPrev, blocksNameLine, blocksNext, blocksManage),
             PresetRow(typesLabel, typesPrev, typesNameLine, typesNext, typesManage),
@@ -435,14 +463,14 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         )) {
             var px = x + PAD
             label.setRectangle(labelWidth, TextLineWidget.HEIGHT, px, py + 5)
-            px += labelWidth
+            px += labelWidth + GAP
             prev.setRectangle(20, ROW, px, py)
             px += 20 + GAP
             nameLine.setRectangle(nameWidth, TextLineWidget.HEIGHT, px, py + 5)
             px += nameWidth + GAP
             next.setRectangle(20, ROW, px, py)
-            px += 20 + GAP
-            manage.setRectangle(150, ROW, px, py)
+            // Right-aligned against the card edge, so the three Manage buttons form a column.
+            manage.setRectangle(150, ROW, x + contentWidth - PAD - 150, py)
             py += ROW + ROW_GAP
         }
         val presetsBottom = py - ROW_GAP + PAD
@@ -451,10 +479,10 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
     private data class PresetRow(
         val label: TextLineWidget,
-        val prev: Button,
+        val prev: ActButtonWidget,
         val nameLine: TextLineWidget,
-        val next: Button,
-        val manage: Button,
+        val next: ActButtonWidget,
+        val manage: ActButtonWidget,
     )
 
     // ------------------------------------------------------------------ mutation
@@ -536,12 +564,10 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
         overlayToggle.checked = ApSettings.showPaintedOverlay
         overlayToggle.accent = ApSettings.paintedOverlayColor
-        overlayPanel.accent = ApSettings.paintedOverlayColor
         overlayRadiusStepper.value = ApSettings.paintedOverlayRadius
 
         roomScopeToggle.checked = ApSettings.dungeonRoomScope
 
-        coloursPanel.accent = ApSettings.areaOutlineColor
 
         blocksNameLine.message = Component.literal(PresetStores.blocks.activeName)
         typesNameLine.message = Component.literal(PresetStores.types.activeName)

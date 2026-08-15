@@ -2,6 +2,8 @@ package com.maxisch.client.gui.tab
 
 import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.paint.PaintHistory
@@ -23,7 +25,7 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private companion object {
         const val MARGIN = 8
         const val ROW_HEIGHT = 14
-        const val BUTTON_HEIGHT = 20
+        const val BUTTON_HEIGHT = 16
         const val GAP = 4
         const val GREY = 0xFFA0A0A0.toInt()
     }
@@ -33,7 +35,7 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private val headerLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val undoButton = add(
-        Button.builder(Component.translatable("austrianpainter.history.undo")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.history.undo")) {
             screen.status(PaintStorage.undo())
             refresh()
         }
@@ -43,13 +45,19 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     )
 
     private val redoButton = add(
-        Button.builder(Component.translatable("austrianpainter.history.redo")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.history.redo")) {
             screen.status(PaintStorage.redo())
             refresh()
         }
             .width(110)
             .tooltip(KeyHints.redoTooltip())
             .build(),
+    )
+
+    private val listCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.history")) {
+            Component.literal(list.rows.size.toString())
+        },
     )
 
     private val list = add(
@@ -70,7 +78,7 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ layout
 
-    override fun doLayout(area: ScreenRectangle) {
+    override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
         var y = area.top() + GAP
@@ -83,7 +91,13 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         y += BUTTON_HEIGHT + GAP * 2
 
         val listHeight = (area.bottom() - y - GAP).coerceAtLeast(ROW_HEIGHT)
-        list.setRectangle(contentWidth, listHeight, x, y)
+        listCard.setRectangle(contentWidth, listHeight, x, y)
+        list.setRectangle(
+            contentWidth - CardWidget.PAD * 2,
+            (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT),
+            x + CardWidget.PAD,
+            y + CardWidget.HEADER_HEIGHT,
+        )
     }
 
     // ------------------------------------------------------------------ state
