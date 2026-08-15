@@ -2,6 +2,12 @@ package com.maxisch.client.gui.tab
 
 import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.NVGUtils
+import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.CardWidget
+import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.paint.ApSettings
@@ -37,7 +43,12 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private companion object {
         const val MARGIN = 8
         const val ROW_HEIGHT = 16
-        const val BUTTON_HEIGHT = 20
+
+        /** Accent bar identifying a rule's array or zone. */
+        const val ACCENT_WIDTH = 3
+        const val ACCENT_INSET = 2
+        const val ACCENT_RADIUS = 1.5f
+        const val BUTTON_HEIGHT = 16
         const val GAP = 4
 
         // Device-array accents match each array's real in-game glass colour.
@@ -70,21 +81,38 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ widgets - device panel
 
+    // Cards first: they are the ground their lists draw on top of.
+    private val deviceCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.devices")) {
+            Component.literal(DungeonRulesLogic.deviceRules.size.toString())
+        },
+    )
+    private val zoneCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.zones")) {
+            Component.literal(BossZones.RULES.size.toString())
+        },
+    )
+
     private val deviceHeaderLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val deviceEnableButton = add(
-        Button.builder(deviceEnableLabel()) { toggleDeviceEnabled() }.width(90).build(),
+        ActButtonWidget.builder(deviceEnableLabel()) { toggleDeviceEnabled() }
+            .width(90)
+            // The status line says only whether the rules are live; where they become live is a
+            // sentence, and a sentence does not fit in half a tab. It lives here instead.
+            .tooltip(Tooltip.create(Component.translatable("austrianpainter.device.live_hint")))
+            .build(),
     )
 
     private val deviceSeedButton = add(
-        Button.builder(deviceSeedLabel()) { toggleDeviceSeed() }
+        ActButtonWidget.builder(deviceSeedLabel()) { toggleDeviceSeed() }
             .width(100)
             .tooltip(Tooltip.create(Component.translatable("austrianpainter.device.seed_hint")))
             .build(),
     )
 
     private val deviceResetButton = add(
-        Button.builder(Component.translatable("austrianpainter.device.reset")) { resetDeviceRules() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.device.reset")) { resetDeviceRules() }
             .width(110).build(),
     )
 
@@ -102,11 +130,14 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private val zoneHeaderLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val zoneEnableButton = add(
-        Button.builder(zoneEnableLabel()) { toggleZonesEnabled() }.width(90).build(),
+        ActButtonWidget.builder(zoneEnableLabel()) { toggleZonesEnabled() }
+            .width(90)
+            .tooltip(Tooltip.create(Component.translatable("austrianpainter.zones.live_hint")))
+            .build(),
     )
 
     private val zoneResetButton = add(
-        Button.builder(Component.translatable("austrianpainter.zones.reset")) { resetZoneRules() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.zones.reset")) { resetZoneRules() }
             .width(110).build(),
     )
 
@@ -124,17 +155,17 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private val editingLine = add(TextLineWidget(0, 0, 0, YELLOW))
 
     private val donorButton = add(
-        Button.builder(Component.translatable("austrianpainter.device.pick_donor")) { pickDonor() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.device.pick_donor")) { pickDonor() }
             .width(120).build(),
     )
 
     private val paletteButton = add(
-        Button.builder(Component.translatable("austrianpainter.device.use_palette")) { cyclePalette() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.device.use_palette")) { cyclePalette() }
             .width(120).build(),
     )
 
     private val clearButton = add(
-        Button.builder(Component.translatable("austrianpainter.device.clear_rule")) { clearRule() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.device.clear_rule")) { clearRule() }
             .width(110).build(),
     )
 
@@ -144,7 +175,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ layout
 
-    override fun doLayout(area: ScreenRectangle) {
+    override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
         val leftWidth = (contentWidth - GAP * 2) / 2
@@ -174,8 +205,13 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         val editingLineY = editorRowY - TextLineWidget.HEIGHT - GAP
 
         val listHeight = (editingLineY - y - GAP).coerceAtLeast(ROW_HEIGHT)
-        deviceList.setRectangle(leftWidth, listHeight, x, y)
-        zoneList.setRectangle(rightWidth, listHeight, rightX, y)
+        // Each list sits in a titled card, as the shell draws them; the list itself is inset inside.
+        deviceCard.setRectangle(leftWidth, listHeight, x, y)
+        zoneCard.setRectangle(rightWidth, listHeight, rightX, y)
+        val listTop = y + CardWidget.HEADER_HEIGHT
+        val innerHeight = (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT)
+        deviceList.setRectangle(leftWidth - CardWidget.PAD * 2, innerHeight, x + CardWidget.PAD, listTop)
+        zoneList.setRectangle(rightWidth - CardWidget.PAD * 2, innerHeight, rightX + CardWidget.PAD, listTop)
 
         editingLine.setRectangle(contentWidth, TextLineWidget.HEIGHT, x, editingLineY)
         donorButton.setRectangle(donorButton.width, BUTTON_HEIGHT, x, editorRowY)
@@ -394,34 +430,57 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ row rendering
 
+    /**
+     * The coloured bar identifying which array or zone a rule belongs to.
+     *
+     * Inset from the row's top and bottom rather than filling its full height: run together, the
+     * bars of consecutive rules in the same array read as one continuous stripe, and the point of
+     * the colour is to let you count the rules in a group at a glance.
+     */
+    private fun drawAccent(graphics: GuiGraphicsExtractor, x: Int, y: Int, colour: Int) {
+        nvgSurface(
+            graphics, x, y, ACCENT_WIDTH, ROW_HEIGHT,
+            nvg = {
+                NVGUtils.drawRect(
+                    x.toFloat(),
+                    (y + ACCENT_INSET).toFloat(),
+                    ACCENT_WIDTH.toFloat(),
+                    (ROW_HEIGHT - ACCENT_INSET * 2).toFloat(),
+                    ACCENT_RADIUS,
+                    Theme.c(colour),
+                )
+            },
+            vanilla = { graphics.fill(x, y + ACCENT_INSET, x + ACCENT_WIDTH, y + ROW_HEIGHT - ACCENT_INSET, colour) },
+        )
+    }
+
     private fun drawDeviceRow(
         graphics: GuiGraphicsExtractor,
         rule: DeviceRule,
         x: Int,
         y: Int,
     ) {
-        graphics.fill(x, y, x + 3, y + ROW_HEIGHT, deviceAccent(rule))
-
-        val sourceStack = ItemStack(rule.source.block)
-        if (!sourceStack.isEmpty) graphics.item(sourceStack, x + 6, y)
+        RowContent.accent(graphics, x, y, ROW_HEIGHT, deviceAccent(rule))
 
         val target = ApSettings.deviceRule(rule.array, rule.source)
-        if (target is AreaTarget.Donor) {
-            val donorStack = ItemStack(target.block)
-            if (!donorStack.isEmpty) graphics.item(donorStack, x + 24, y)
-        }
+        val labelX = RowContent.pair(
+            graphics, x, y, ROW_HEIGHT,
+            rule.source.block,
+            (target as? AreaTarget.Donor)?.block,
+        )
 
-        val label = if (target == null) {
-            Component.translatable("austrianpainter.device.row_off", arrayName(rule), rule.source.block.name)
-        } else {
-            Component.translatable(
-                "austrianpainter.device.row",
-                arrayName(rule),
-                rule.source.block.name,
-                target.displayName(),
-            )
-        }
-        graphics.text(font, label, x + 44, y + 4, 0xFFFFFFFF.toInt())
+        // The array is the row's grouping, so it rides at the right edge as the trailing readout and
+        // leaves the label to say what the rule actually does.
+        RowContent.label(
+            graphics,
+            labelX,
+            y,
+            ROW_HEIGHT,
+            x + deviceList.width,
+            text = target?.displayName() ?: Component.translatable("austrianpainter.device.left_alone"),
+            trailing = arrayName(rule),
+            colour = if (target == null) Theme.MUTED else Theme.INK,
+        )
     }
 
     private fun drawZoneRow(
@@ -430,22 +489,24 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         x: Int,
         y: Int,
     ) {
-        graphics.fill(x, y, x + 3, y + ROW_HEIGHT, zoneAccent(rule.zone))
-
-        val sourceStack = ItemStack(rule.block)
-        if (!sourceStack.isEmpty) graphics.item(sourceStack, x + 6, y)
+        RowContent.accent(graphics, x, y, ROW_HEIGHT, zoneAccent(rule.zone))
 
         val target = ApSettings.zoneRule(rule)
-        if (target is AreaTarget.Donor) {
-            val donorStack = ItemStack(target.block)
-            if (!donorStack.isEmpty) graphics.item(donorStack, x + 24, y)
-        }
+        val labelX = RowContent.pair(
+            graphics, x, y, ROW_HEIGHT,
+            rule.block,
+            (target as? AreaTarget.Donor)?.block,
+        )
 
-        val label = if (target == null) {
-            Component.translatable("austrianpainter.zones.row_off", zoneName(rule), sourceName(rule))
-        } else {
-            Component.translatable("austrianpainter.zones.row", zoneName(rule), sourceName(rule), target.displayName())
-        }
-        graphics.text(font, label, x + 44, y + 4, 0xFFFFFFFF.toInt())
+        RowContent.label(
+            graphics,
+            labelX,
+            y,
+            ROW_HEIGHT,
+            x + zoneList.width,
+            text = target?.displayName() ?: Component.translatable("austrianpainter.device.left_alone"),
+            trailing = zoneName(rule),
+            colour = if (target == null) Theme.MUTED else Theme.INK,
+        )
     }
 }

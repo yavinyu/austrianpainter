@@ -2,6 +2,13 @@ package com.maxisch.client.gui.tab
 
 import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.Gradient
+import com.maxisch.client.render.render2d.NVGUtils
+import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.CardWidget
+import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.paint.ApPaths
@@ -16,6 +23,7 @@ import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
+import com.maxisch.client.gui.widget.ApEditBox
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.navigation.ScreenRectangle
@@ -43,10 +51,16 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         const val MARGIN = 8
         const val ROW_HEIGHT = 14
         const val PALETTE_ROW_HEIGHT = 16
-        const val BUTTON_HEIGHT = 20
+        const val BUTTON_HEIGHT = 16
         const val GAP = 4
         const val GREY = 0xFFA0A0A0.toInt()
         const val BAR = 0x80FFAA00.toInt()
+
+        /** Weight bar: left of the track, right margin, height and corner. */
+        const val BAR_X = 22
+        const val BAR_RIGHT_PAD = 6
+        const val BAR_HEIGHT = 3
+        const val BAR_RADIUS = 1.5f
         const val COARSE_STEP = 10
     }
 
@@ -76,60 +90,72 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ widgets
 
-    private val kindButtons: List<Button> = PresetKind.entries.map { k ->
-        add(Button.builder(kindLabel(k)) { selectKind(k) }.width(80).build())
+    private val kindButtons: List<ActButtonWidget> = PresetKind.entries.map { k ->
+        add(ActButtonWidget.builder(kindLabel(k)) { selectKind(k) }.width(80).build())
     }
 
     private val headerLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val prevButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.prev")) { stepActive(-1) }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.prev")) { stepActive(-1) }
             .width(20)
             .tooltip(Tooltip.create(Component.translatable("austrianpainter.presets.quick_swap_hint")))
             .build(),
     )
 
     private val nextButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.next")) { stepActive(1) }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.next")) { stepActive(1) }
             .width(20)
             .tooltip(Tooltip.create(Component.translatable("austrianpainter.presets.quick_swap_hint")))
             .build(),
     )
 
     private val nameBox = add(
-        EditBox(font, 0, 0, 160, 20, Component.translatable("austrianpainter.presets.name")).apply {
+        ApEditBox(font, 0, 0, 160, 20, Component.translatable("austrianpainter.presets.name")).apply {
             setHint(Component.translatable("austrianpainter.presets.name"))
         },
     )
 
     private val newButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.new")) { create() }.width(70).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.new")) { create() }.width(70).build(),
     )
 
     private val duplicateButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.duplicate")) { duplicate() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.duplicate")) { duplicate() }
             .width(84).build(),
     )
 
     private val renameButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.rename")) { rename() }.width(70).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.rename")) { rename() }.width(70).build(),
     )
 
     private val activateButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.activate")) { activateSelected() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.activate")) { activateSelected() }
             .width(100).build(),
     )
 
     private val deleteButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.delete")) { delete() }.width(100).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.delete")) { delete() }.width(100).build(),
     )
 
     private val copyButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.copy")) { copy() }.width(100).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.copy")) { copy() }.width(100).build(),
     )
 
     private val pasteButton = add(
-        Button.builder(Component.translatable("austrianpainter.presets.paste")) { paste() }.width(100).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.presets.paste")) { paste() }.width(100).build(),
+    )
+
+    // Cards first: they are the ground the two lists draw on.
+    private val namesCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.presets")) {
+            Component.literal(list.rows.size.toString())
+        },
+    )
+    private val contentsCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.contents")) {
+            Component.literal(if (editingActivePalette) paletteList.rows.size.toString() else contents.rows.size.toString())
+        },
     )
 
     private val list = add(
@@ -167,13 +193,13 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     )
 
     private val paletteAddButton = add(
-        Button.builder(Component.translatable("austrianpainter.palette.add")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.palette.add")) {
             Minecraft.getInstance().setScreenAndShow(BlockPickerScreen(screen) { block -> addDonor(block) })
         }.width(110).build(),
     )
 
     private val paletteRemoveButton = add(
-        Button.builder(Component.translatable("austrianpainter.palette.remove")) { removeDonor() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.palette.remove")) { removeDonor() }
             .width(100).build(),
     )
 
@@ -198,7 +224,7 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ layout
 
-    override fun doLayout(area: ScreenRectangle) {
+    override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
         var y = area.top() + GAP
@@ -260,9 +286,16 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
         val listsY = y + BUTTON_HEIGHT + GAP
         val listHeight = (area.bottom() - listsY - GAP).coerceAtLeast(ROW_HEIGHT)
-        list.setRectangle(namesWidth, listHeight, x, listsY)
-        contents.setRectangle(contentsWidth, listHeight, contentsX, listsY)
-        paletteList.setRectangle(contentsWidth, listHeight, contentsX, listsY)
+
+        // Names on the left, the selected preset's contents on the right, each in its own card.
+        namesCard.setRectangle(namesWidth, listHeight, x, listsY)
+        contentsCard.setRectangle(contentsWidth, listHeight, contentsX, listsY)
+
+        val innerTop = listsY + CardWidget.HEADER_HEIGHT
+        val innerHeight = (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT)
+        list.setRectangle(namesWidth - CardWidget.PAD * 2, innerHeight, x + CardWidget.PAD, innerTop)
+        contents.setRectangle(contentsWidth - CardWidget.PAD * 2, innerHeight, contentsX + CardWidget.PAD, innerTop)
+        paletteList.setRectangle(contentsWidth - CardWidget.PAD * 2, innerHeight, contentsX + CardWidget.PAD, innerTop)
     }
 
     // ------------------------------------------------------------------ kind / active-preset
@@ -429,17 +462,55 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     private fun drawPaletteRow(graphics: GuiGraphicsExtractor, block: Block, x: Int, y: Int) {
         val weight = palette.weights[block] ?: return
         val total = palette.totalWeight().coerceAtLeast(1)
-        // A bar behind the row makes the mix readable without doing the arithmetic.
-        val barWidth = (paletteList.width - 4) * weight / total
-        graphics.fill(x + 2, y + PALETTE_ROW_HEIGHT - 3, x + 2 + barWidth, y + PALETTE_ROW_HEIGHT - 1, BAR)
+        val percent = weight * 100 / total
 
-        val stack = ItemStack(block)
-        if (!stack.isEmpty) graphics.item(stack, x + 2, y)
+        // The share of the mix, as a track the row's own bar fills. The old version was a 2px sliver
+        // along the bottom edge with no track behind it, so a small weight was indistinguishable
+        // from none at all and there was nothing to judge the fill against.
+        val trackX = x + BAR_X
+        val trackWidth = (paletteList.width - BAR_X - BAR_RIGHT_PAD).coerceAtLeast(1)
+        val trackY = y + PALETTE_ROW_HEIGHT - BAR_HEIGHT - 2
+        val fillWidth = (trackWidth * weight / total).coerceAtLeast(1)
 
-        graphics.text(
-            font,
-            Component.translatable("austrianpainter.palette.row", block.name, weight, weight * 100 / total),
-            x + 22, y + 4, 0xFFFFFFFF.toInt(),
+        nvgSurface(
+            graphics, trackX, trackY, trackWidth, BAR_HEIGHT,
+            nvg = {
+                NVGUtils.drawRect(
+                    trackX.toFloat(),
+                    trackY.toFloat(),
+                    trackWidth.toFloat(),
+                    BAR_HEIGHT.toFloat(),
+                    BAR_RADIUS,
+                    Theme.c(Theme.GROUND),
+                )
+                NVGUtils.drawGradientRect(
+                    trackX.toFloat(),
+                    trackY.toFloat(),
+                    fillWidth.toFloat(),
+                    BAR_HEIGHT.toFloat(),
+                    BAR_RADIUS,
+                    Theme.c(Theme.withAlpha(Theme.AMBER, 0xB0)),
+                    Theme.c(Theme.AMBER),
+                    Gradient.LeftToRight,
+                )
+            },
+            vanilla = {
+                graphics.fill(trackX, trackY, trackX + trackWidth, trackY + BAR_HEIGHT, Theme.GROUND)
+                graphics.fill(trackX, trackY, trackX + fillWidth, trackY + BAR_HEIGHT, BAR)
+            },
+        )
+
+        val labelX = RowContent.pair(graphics, x, y, PALETTE_ROW_HEIGHT, block, null)
+        RowContent.label(
+            graphics,
+            labelX,
+            // Raised by the bar's height so the name centres on the space above its own weight bar
+            // rather than on the row including it.
+            y - BAR_HEIGHT,
+            PALETTE_ROW_HEIGHT,
+            x + paletteList.width,
+            text = block.name,
+            trailing = Component.translatable("austrianpainter.palette.share", weight, percent),
         )
     }
 
