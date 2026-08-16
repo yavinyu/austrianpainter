@@ -1,17 +1,17 @@
 package com.maxisch.client
 
-import com.maxisch.client.render.AreaHighlight
-import com.maxisch.client.render.BlockHighlight
-import com.maxisch.client.render.PaintHud
-import com.maxisch.client.render.PaintedOverlay
-import com.maxisch.client.render.PaintModelPlugin
+import com.maxisch.client.render.overlay.AreaHighlight
+import com.maxisch.client.render.overlay.BlockHighlight
+import com.maxisch.client.render.overlay.PaintHud
+import com.maxisch.client.render.overlay.PaintedOverlay
+import com.maxisch.client.render.model.PaintModelPlugin
 import com.maxisch.client.render.render2d.NvgBridge
 import com.maxisch.dungeon.DeviceColumnData
-import com.maxisch.dungeon.RoomDataStore
-import com.maxisch.dungeon.RoomTracker
-import com.maxisch.paint.ApSettings
+import com.maxisch.dungeon.room.RoomDataStore
+import com.maxisch.dungeon.detect.RoomTracker
+import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PresetStores
+import com.maxisch.paint.preset.PresetStores
 import com.maxisch.paint.session.PaintArea
 import com.maxisch.paint.session.PaintSelection
 import net.fabricmc.api.ClientModInitializer
@@ -23,6 +23,8 @@ import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
+import com.maxisch.client.keybind.KeyHints
+import com.maxisch.client.keybind.PaintKeys
 
 class AustrianpainterClient : ClientModInitializer {
 

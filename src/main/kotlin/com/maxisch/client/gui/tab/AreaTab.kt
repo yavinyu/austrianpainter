@@ -1,18 +1,18 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.KeyHints
-import com.maxisch.client.gui.BlockPickerScreen
-import com.maxisch.client.gui.BlockSearch
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.keybind.KeyHints
+import com.maxisch.client.gui.screen.BlockPickerScreen
+import com.maxisch.client.gui.screen.BlockSearch
+import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.CoordinatePadWidget
 import com.maxisch.client.gui.widget.TextLineWidget
-import com.maxisch.client.render.BlockHighlight
-import com.maxisch.paint.AreaSelector
-import com.maxisch.paint.PaintFilter
+import com.maxisch.client.render.overlay.BlockHighlight
+import com.maxisch.paint.rule.AreaSelector
+import com.maxisch.paint.rule.PaintFilter
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.session.AreaShape
 import com.maxisch.paint.session.PaintArea

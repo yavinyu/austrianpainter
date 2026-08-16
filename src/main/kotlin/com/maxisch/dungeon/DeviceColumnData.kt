@@ -2,8 +2,8 @@ package com.maxisch.dungeon
 
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
-import com.maxisch.paint.ApJson
-import com.maxisch.paint.ApLog.LOGGER
+import com.maxisch.paint.settings.ApJson
+import com.maxisch.paint.settings.ApLog.LOGGER
 
 /** One pillar's base block. The pillar rises from here, so the paint rule covers a band above it. */
 data class DevicePoint(val x: Int, val y: Int, val z: Int)

@@ -1,10 +1,11 @@
 package com.maxisch.paint
 
-import com.maxisch.dungeon.RoomScope
-import com.maxisch.dungeon.RoomTracker
+import com.maxisch.dungeon.room.RoomScope
+import com.maxisch.dungeon.detect.RoomTracker
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
 import net.minecraft.world.level.block.Block
+import com.maxisch.paint.rule.PaintRules
 
 /**
  * The one entry point the rest of the mod paints through.

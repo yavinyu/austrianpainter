@@ -1,7 +1,7 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.KeyHints
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.keybind.KeyHints
+import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.CardWidget

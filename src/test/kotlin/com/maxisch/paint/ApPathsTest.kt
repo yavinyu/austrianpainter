@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.maxisch.paint.settings.ApPaths
 
 /**
  * Preset names come straight from a text box and are turned into file names, so this is the one

@@ -1,7 +1,8 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.gui.ColorPickerScreen
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.keybind.PaintKeys
+import com.maxisch.client.gui.screen.ColorPickerScreen
+import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.ColorSwatchWidget
@@ -9,14 +10,15 @@ import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.StepperWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.client.gui.widget.ToggleSwitchWidget
-import com.maxisch.client.render.BlockHighlight
-import com.maxisch.client.render.PaintedOverlay
-import com.maxisch.dungeon.RoomTracker
-import com.maxisch.paint.ApSettings
+import com.maxisch.client.render.overlay.BlockHighlight
+import com.maxisch.client.render.overlay.PaintedOverlay
+import com.maxisch.dungeon.detect.RoomTracker
+import com.maxisch.paint.settings.ApSettings
+import com.maxisch.paint.ChunkRebuild
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PresetKind
-import com.maxisch.paint.PresetStore
-import com.maxisch.paint.PresetStores
+import com.maxisch.paint.preset.PresetKind
+import com.maxisch.paint.preset.PresetStore
+import com.maxisch.paint.preset.PresetStores
 import com.maxisch.paint.session.PaintBrush
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
@@ -77,6 +79,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val generalPanel = add(CardWidget(Component.translatable("austrianpainter.settings.general")))
     private val overlayPanel = add(CardWidget(Component.translatable("austrianpainter.settings.overlay")))
     private val dungeonPanel = add(CardWidget(Component.translatable("austrianpainter.settings.dungeon")))
+    private val replaceFluidPanel = add(CardWidget(Component.translatable("austrianpainter.settings.replace_fluid")))
     private val presetsPanel = add(CardWidget(Component.translatable("austrianpainter.settings.presets")))
 
     // ------------------------------------------------------------------ colours band
@@ -284,6 +287,56 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
             .build(),
     )
 
+    // ------------------------------------------------------------------ replace fluid panel
+
+    private val waterAsLavaToggle =
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.waterAsLava, GREY) { toggleWaterAsLava() })
+    private val waterAsLavaLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
+        it.message = Component.translatable("austrianpainter.settings.replace_fluid_water_as_lava")
+    }
+
+    private val lavaAsWaterToggle =
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.lavaAsWater, GREY) { toggleLavaAsWater() })
+    private val lavaAsWaterLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
+        it.message = Component.translatable("austrianpainter.settings.replace_fluid_lava_as_water")
+    }
+
+    private val waterTintToggle =
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.waterTintEnabled, GREY) { toggleWaterTint() })
+    private val waterTintLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
+        it.message = Component.translatable("austrianpainter.settings.replace_fluid_water_tint")
+    }
+    private val waterTintBox: EditBox
+    private val waterTintSwatch: ColorSwatchWidget
+
+    private val lavaTintToggle =
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.lavaTintEnabled, GREY) { toggleLavaTint() })
+    private val lavaTintLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
+        it.message = Component.translatable("austrianpainter.settings.replace_fluid_lava_tint")
+    }
+    private val lavaTintBox: EditBox
+    private val lavaTintSwatch: ColorSwatchWidget
+
+    init {
+        val (wtb, wts) = colorRow({ ApSettings.waterTintColor }, { ApSettings.waterTintColor = it }) {
+            ChunkRebuild.markAll()
+        }
+        waterTintBox = wtb
+        waterTintSwatch = wts
+        val (ltb, lts) = colorRow({ ApSettings.lavaTintColor }, { ApSettings.lavaTintColor = it }) {
+            ChunkRebuild.markAll()
+        }
+        lavaTintBox = ltb
+        lavaTintSwatch = lts
+    }
+
+    private data class FluidTintRow(
+        val toggle: ToggleSwitchWidget,
+        val label: TextLineWidget,
+        val box: EditBox,
+        val swatch: ColorSwatchWidget,
+    )
+
     // ------------------------------------------------------------------ presets strip
 
     private val blocksLabel = add(TextLineWidget(0, 0, 0, GREY)).also {
@@ -441,10 +494,48 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         overlayPanel.setRectangle(halfWidth, bottomBandBottom - bottomTop, x, bottomTop)
         dungeonPanel.setRectangle(rightWidth, bottomBandBottom - bottomTop, dungeonX, bottomTop)
 
+        // -------------------------------------------------- replace fluid panel, full width
+        val fluidTop = bottomBandBottom + GAP
+        var fy = fluidTop + CardWidget.HEADER_HEIGHT
+        val fluidInner = contentWidth - PAD * 2
+
+        for ((toggle, label) in listOf(
+            waterAsLavaToggle to waterAsLavaLabelLine,
+            lavaAsWaterToggle to lavaAsWaterLabelLine,
+        )) {
+            toggle.setRectangle(TOGGLE_W, TOGGLE_H, x + PAD, fy + 3)
+            label.setRectangle(
+                (fluidInner - TOGGLE_W - 4).coerceAtLeast(20),
+                TextLineWidget.HEIGHT,
+                x + PAD + TOGGLE_W + 4,
+                fy + 5,
+            )
+            fy += ROW
+        }
+        fy += ROW_GAP - 2
+
+        val tintLabelWidth = 100
+        val tintBoxX = x + PAD + TOGGLE_W + 4 + tintLabelWidth + 4
+        val tintBoxWidth = (fluidInner - TOGGLE_W - 4 - tintLabelWidth - 4 - SWATCH_W - 4).coerceAtLeast(60)
+        val toggleYOffset = (SWATCH_H - TOGGLE_H) / 2
+        val tintLabelYOffset = (SWATCH_H - TextLineWidget.HEIGHT) / 2
+        for (row in listOf(
+            FluidTintRow(waterTintToggle, waterTintLabelLine, waterTintBox, waterTintSwatch),
+            FluidTintRow(lavaTintToggle, lavaTintLabelLine, lavaTintBox, lavaTintSwatch),
+        )) {
+            row.toggle.setRectangle(TOGGLE_W, TOGGLE_H, x + PAD, fy + toggleYOffset)
+            row.label.setRectangle(tintLabelWidth, TextLineWidget.HEIGHT, x + PAD + TOGGLE_W + 4, fy + tintLabelYOffset)
+            row.box.setRectangle(tintBoxWidth, SWATCH_H, tintBoxX, fy)
+            row.swatch.setRectangle(SWATCH_W, SWATCH_H, tintBoxX + tintBoxWidth + 4, fy)
+            fy += SWATCH_H + ROW_GAP
+        }
+        val fluidContentBottom = fy - ROW_GAP + PAD
+        replaceFluidPanel.setRectangle(contentWidth, fluidContentBottom - fluidTop, x, fluidTop)
+
         // -------------------------------------------------- presets strip, full width below
-        val presetsTop = bottomBandBottom + GAP
+        val presetsTop = fluidContentBottom + GAP
         var py = presetsTop + CardWidget.HEADER_HEIGHT
-        
+
 
         // Measured, not guessed: "Block-type preset" and "Donor palette" are both wider than the 60
         // this used to reserve, so the label ran underneath the ‹ button next to it.
@@ -509,8 +600,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     }
 
     private fun toggleKeybinds() {
-        ApSettings.keybindsEnabled = !ApSettings.keybindsEnabled
-        ApSettings.save()
+        PaintKeys.setEnabled(!ApSettings.keybindsEnabled)
         refresh()
     }
 
@@ -540,6 +630,34 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         refresh()
     }
 
+    private fun toggleWaterAsLava() {
+        ApSettings.waterAsLava = !ApSettings.waterAsLava
+        ApSettings.save()
+        ChunkRebuild.markAll()
+        refresh()
+    }
+
+    private fun toggleLavaAsWater() {
+        ApSettings.lavaAsWater = !ApSettings.lavaAsWater
+        ApSettings.save()
+        ChunkRebuild.markAll()
+        refresh()
+    }
+
+    private fun toggleWaterTint() {
+        ApSettings.waterTintEnabled = !ApSettings.waterTintEnabled
+        ApSettings.save()
+        ChunkRebuild.markAll()
+        refresh()
+    }
+
+    private fun toggleLavaTint() {
+        ApSettings.lavaTintEnabled = !ApSettings.lavaTintEnabled
+        ApSettings.save()
+        ChunkRebuild.markAll()
+        refresh()
+    }
+
     private fun stepPreset(store: PresetStore<*>, activate: (String) -> Unit, delta: Int) {
         val names = store.listWithActive()
         if (names.isEmpty()) return
@@ -564,6 +682,14 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
 
         roomScopeToggle.checked = ApSettings.dungeonRoomScope
 
+        waterAsLavaToggle.checked = ApSettings.waterAsLava
+        lavaAsWaterToggle.checked = ApSettings.lavaAsWater
+        waterTintToggle.checked = ApSettings.waterTintEnabled
+        lavaTintToggle.checked = ApSettings.lavaTintEnabled
+        waterTintBox.value = "%08X".format(ApSettings.waterTintColor)
+        waterTintSwatch.color = ApSettings.waterTintColor
+        lavaTintBox.value = "%08X".format(ApSettings.lavaTintColor)
+        lavaTintSwatch.color = ApSettings.lavaTintColor
 
         blocksNameLine.message = Component.literal(PresetStores.blocks.activeName)
         typesNameLine.message = Component.literal(PresetStores.types.activeName)
