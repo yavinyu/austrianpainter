@@ -5,6 +5,7 @@ import com.maxisch.client.render.BlockHighlight
 import com.maxisch.client.render.PaintHud
 import com.maxisch.client.render.PaintedOverlay
 import com.maxisch.client.render.PaintModelPlugin
+import com.maxisch.client.render.render2d.NvgBridge
 import com.maxisch.dungeon.DeviceColumnData
 import com.maxisch.dungeon.RoomDataStore
 import com.maxisch.dungeon.RoomTracker
@@ -42,6 +43,10 @@ class AustrianpainterClient : ClientModInitializer {
         PaintKeys.register()
         PaintCommands.register()
         PaintHud.register()
+        // Only the render-loop bridge. NanoVG's own context and its fonts start on the first frame
+        // that draws: nvgCreate needs a current GL context and the fonts need a resource manager
+        // that has finished reloading, and neither is guaranteed while this constructor still runs.
+        NvgBridge.register()
         AreaHighlight.register()
         BlockHighlight.register()
         PaintedOverlay.register()

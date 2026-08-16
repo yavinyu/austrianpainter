@@ -4,7 +4,11 @@ import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.BlockSearch
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
+import com.maxisch.client.gui.widget.CardWidget
+import com.maxisch.client.gui.widget.CoordinatePadWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.client.render.BlockHighlight
 import com.maxisch.paint.AreaSelector
@@ -14,6 +18,7 @@ import com.maxisch.paint.session.AreaShape
 import com.maxisch.paint.session.PaintArea
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
+import com.maxisch.client.gui.widget.ApEditBox
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.core.BlockPos
@@ -33,10 +38,13 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     private companion object {
         const val MARGIN = 8
         const val ROW_HEIGHT = 14
-        const val BUTTON_HEIGHT = 20
+        const val BUTTON_HEIGHT = 16
         const val GAP = 4
 
         const val LABEL_WIDTH = 56
+
+        /** Inset of the corner rows inside [CoordinatePadWidget]. */
+        const val PAD_INNER = 6
         const val FIELD_WIDTH = 46
 
         const val GREY = 0xFFA0A0A0.toInt()
@@ -60,6 +68,19 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
     private val font get() = Minecraft.getInstance().font
 
+    /** Added before the rows it frames - render order is add() order, and it draws underneath them. */
+    private val pad = add(CoordinatePadWidget { if (PaintArea.complete) PaintArea.volume() else null })
+
+    private val fillCard = add(CardWidget(Component.translatable("austrianpainter.card.fill_from")))
+    private val actionsCard = add(CardWidget(Component.translatable("austrianpainter.card.actions")))
+    private val dangerCard = add(CardWidget(Component.translatable("austrianpainter.card.danger")))
+
+    private val listCard = add(
+        CardWidget(Component.translatable("austrianpainter.card.scan")) {
+            Component.translatable("austrianpainter.card.scan.count", PaintArea.selected.size, list.rows.size)
+        },
+    )
+
     private val cornerOneLabel = add(TextLineWidget(0, 0, LABEL_WIDTH, GREY)).also {
         it.message = Component.translatable("austrianpainter.area.corner_one")
     }
@@ -70,16 +91,13 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     private val fields1 = buildFields(first = true)
     private val fields2 = buildFields(first = false)
 
-    private val useLookedAt1 = add(useLookedAtButton(first = true))
-    private val useLookedAt2 = add(useLookedAtButton(first = false))
-
     private val sizeLine = add(TextLineWidget(0, 0, 0, GREY))
     private val mappingLine = add(TextLineWidget(0, 0, 0, YELLOW))
 
     // ------------------------------------------------------------------ buttons
 
     private val donorButton = add(
-        Button.builder(Component.translatable("austrianpainter.pick_donor")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.pick_donor")) {
             Minecraft.getInstance().setScreenAndShow(
                 BlockPickerScreen(screen) { logic.assignDonor(it) },
             )
@@ -87,14 +105,14 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     )
 
     private val paletteButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.use_palette")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.use_palette")) {
             logic.assignPalette()
             refreshButtons()
         }.width(100).build(),
     )
 
     private val selectAllButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.select_all")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.select_all")) {
             // Block types only: "Everything" and "Unchanged" overlap them, and a rule on all three
             // at once would leave two of them matching nothing once precedence is resolved.
             list.rows.forEach { if (it.selector is AreaSelector.Type) PaintArea.selected.add(it.selector) }
@@ -103,67 +121,67 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     )
 
     private val replaceButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.replace")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.replace")) {
             logic.replace()
             rescan()
-        }.width(100).build(),
+        }.width(100).variant(ActButtonWidget.Variant.PRIMARY).build(),
     )
 
     private val replaceRandomButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.replace_random")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.replace_random")) {
             logic.replaceRandom()
             rescan()
-        }.width(120).build(),
+        }.width(120).variant(ActButtonWidget.Variant.PRIMARY).build(),
     )
 
     private val rerollButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.reroll")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.reroll")) {
             logic.reroll()
             refreshButtons()
         }.width(75).build(),
     )
 
     private val reapplyButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.reapply_last")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.reapply_last")) {
             logic.reapplyLast()
             rescan()
         }.width(105).build(),
     )
 
     private val saveRulesetButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.save_ruleset")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.save_ruleset")) {
             logic.saveRuleset()
             refreshButtons()
         }.width(100).build(),
     )
 
     private val loadRulesetButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.load_ruleset")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.load_ruleset")) {
             logic.loadRuleset()
             refreshButtons()
         }.width(100).build(),
     )
 
     private val clearMappingButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.clear_mapping")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_mapping")) {
             logic.clearRules()
             refreshButtons()
-        }.width(95).build(),
+        }.width(95).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val unpaintSelectedButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.unpaint_selected")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.unpaint_selected")) {
             logic.clearSelectedPaint()
-        }.width(120).build(),
+        }.width(120).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val clearPaintedButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.clear_painted")) { logic.clearPainted() }
-            .width(105).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_painted")) { logic.clearPainted() }
+            .width(105).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val clearSelectionButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.clear_selection")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_selection")) {
             PaintArea.clearSelection()
             syncFields()
             rescan()
@@ -174,34 +192,34 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     )
 
     private val selectRoomButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.select_room")) { selectRoom() }
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.select_room")) { selectRoom() }
             .width(105).build(),
     )
 
     private val shapeButton = add(
-        Button.builder(shapeLabel()) { cycleShape() }.width(120).build(),
+        ActButtonWidget.builder(shapeLabel()) { cycleShape() }.width(120).build(),
     )
 
     private val previewButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.preview")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.preview")) {
             logic.preview()
             refreshButtons()
         }.width(90).build(),
     )
 
     private val clearPreviewButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.clear_preview")) {
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_preview")) {
             logic.clearPreview()
             refreshButtons()
         }.width(110).build(),
     )
 
     private val rescanButton = add(
-        Button.builder(Component.translatable("austrianpainter.area.rescan")) { rescan() }.width(70).build(),
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.rescan")) { rescan() }.width(70).build(),
     )
 
     private val searchBox = add(
-        EditBox(font, 0, 0, 100, 18, Component.translatable("austrianpainter.search")).apply {
+        ApEditBox(font, 0, 0, 100, 18, Component.translatable("austrianpainter.search")).apply {
             setHint(Component.translatable("austrianpainter.search"))
         },
     )
@@ -234,7 +252,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
                         logic.targetName(target),
                     )
                 }
-                graphics.text(font, label, x + 22, y + 3, 0xFFFFFFFF.toInt())
+                RowContent.label(graphics, x + 22, y, ROW_HEIGHT, x + width, text = label)
             }
         },
     )
@@ -309,9 +327,9 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
     // ------------------------------------------------------------------ corner fields
 
-    private fun buildFields(first: Boolean): Array<EditBox> {
+    private fun buildFields(first: Boolean): Array<ApEditBox> {
         val boxes = Array(3) { axis ->
-            val box = EditBox(font, 0, 0, FIELD_WIDTH, 18, Component.translatable(axisKey(axis)))
+            val box = ApEditBox(font, 0, 0, FIELD_WIDTH, 18, Component.translatable(axisKey(axis)))
             box.setMaxLength(8)
             box.setHint(Component.translatable(axisKey(axis)))
             add(box)
@@ -321,15 +339,6 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         return boxes
     }
 
-    private fun useLookedAtButton(first: Boolean): Button =
-        Button.builder(Component.translatable("austrianpainter.area.use_looked_at")) {
-            screen.lookedAtPos?.let {
-                PaintArea.setCorner(first, it)
-                syncFields()
-                requestRescan()
-            }
-        }.width(120).build()
-
     private fun axisKey(axis: Int): String = when (axis) {
         0 -> "austrianpainter.area.axis_x"
         1 -> "austrianpainter.area.axis_y"
@@ -337,10 +346,11 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     }
 
     /** Blank or half-typed coordinates just leave the stored corner alone. */
-    private fun readCorner(first: Boolean, fields: Array<EditBox>) {
+    private fun readCorner(first: Boolean, fields: Array<ApEditBox>) {
         val values = fields.map { it.value.trim().toIntOrNull() }
         if (values.any { it == null }) return
 
+        // None of the three is null past the check above - Kotlin just can't see it through the list.
         PaintArea.setCorner(first, BlockPos(values[0]!!, values[1]!!, values[2]!!))
         requestRescan()
     }
@@ -352,7 +362,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         suppressResponder = false
     }
 
-    private fun writeCorner(fields: Array<EditBox>, pos: BlockPos?) {
+    private fun writeCorner(fields: Array<ApEditBox>, pos: BlockPos?) {
         val text = listOf(pos?.x, pos?.y, pos?.z)
         for (axis in 0 until 3) {
             fields[axis].value = text[axis]?.toString() ?: ""
@@ -361,51 +371,113 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
     // ------------------------------------------------------------------ layout
 
-    override fun doLayout(area: ScreenRectangle) {
+    override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
-        var y = area.top() + GAP
+        val top = area.top() + GAP
 
-        y = placeCornerRow(x, y, cornerOneLabel, fields1, useLookedAt1)
-        y = placeCornerRow(x, y, cornerTwoLabel, fields2, useLookedAt2)
+        // Two columns, as the shell draws this tool: what defines and fills the box on the left,
+        // what is inside it on the right. The left column is the narrower of the two - its controls
+        // are fixed-width, while the list wants every pixel it can get for block names.
+        val leftWidth = (contentWidth - GAP) * 2 / 5
+        val rightWidth = contentWidth - leftWidth - GAP
+        val rightX = x + leftWidth + GAP
+
+        // -------------------------------------------------- selection pad
+        var y = top
+        y = placeCornerRow(x + PAD_INNER, y + PAD_INNER, cornerOneLabel, fields1)
+        y = placeCornerRow(x + PAD_INNER, y, cornerTwoLabel, fields2)
+        y += CoordinatePadWidget.VOLUME_HEIGHT
+        pad.setRectangle(leftWidth, y - top, x, top)
+
+        // -------------------------------------------------- select room - a third way to define the
+        // box, same zone as the corner fields above rather than an "action" on the box's contents.
         y += GAP
+        selectRoomButton.setRectangle(leftWidth, BUTTON_HEIGHT, x, y)
+        y += BUTTON_HEIGHT
 
+        // -------------------------------------------------- fill-from card
+        val fillTop = y + GAP
+        y = fillTop + CardWidget.HEADER_HEIGHT
+        y = gridButtons(x + CardWidget.PAD, y, leftWidth - CardWidget.PAD * 2, 1, donorButton, paletteButton, shapeButton)
+        y += CardWidget.PAD - GAP
+        fillCard.setRectangle(leftWidth, y - fillTop, x, fillTop)
+
+        // -------------------------------------------------- actions card - commit pair first (the
+        // two verbs used on every pass through this tab), then the rest as a 2-column grid.
+        val actionsTop = y + GAP
+        y = actionsTop + CardWidget.HEADER_HEIGHT
+        val actionsInner = leftWidth - CardWidget.PAD * 2
+        y = gridButtons(x + CardWidget.PAD, y, actionsInner, 2, replaceButton, replaceRandomButton)
+        y += GAP
+        y = gridButtons(
+            x + CardWidget.PAD, y, actionsInner, 2,
+            rerollButton, selectAllButton,
+            previewButton, clearPreviewButton,
+            clearSelectionButton, reapplyButton,
+            saveRulesetButton, loadRulesetButton,
+        )
+        y += CardWidget.PAD - GAP
+        actionsCard.setRectangle(leftWidth, y - actionsTop, x, actionsTop)
+
+        // -------------------------------------------------- danger zone card - the three actions
+        // that discard work, stacked full-width so they read as a warning list, not a compact grid.
+        val dangerTop = y + GAP
+        y = dangerTop + CardWidget.HEADER_HEIGHT
+        y = gridButtons(
+            x + CardWidget.PAD, y, leftWidth - CardWidget.PAD * 2, 1,
+            clearMappingButton, unpaintSelectedButton, clearPaintedButton,
+        )
+        y += CardWidget.PAD - GAP
+        dangerCard.setRectangle(leftWidth, y - dangerTop, x, dangerTop)
+
+        y += GAP
         for (line in listOf(sizeLine, mappingLine)) {
-            line.setRectangle(contentWidth, TextLineWidget.HEIGHT, x, y)
+            line.setRectangle(leftWidth, TextLineWidget.HEIGHT, x, y)
             y += TextLineWidget.HEIGHT
         }
-        y += GAP
 
-        y = placeButtons(x, y, donorButton, paletteButton, selectAllButton)
-        y = placeButtons(x, y, replaceButton, replaceRandomButton, rerollButton)
-        y = placeButtons(x, y, reapplyButton, saveRulesetButton, loadRulesetButton)
-        y = placeButtons(x, y, clearMappingButton, unpaintSelectedButton, clearPaintedButton)
-        y = placeButtons(x, y, previewButton, clearPreviewButton, selectRoomButton)
-        y = placeButtons(x, y, shapeButton)
+        // -------------------------------------------------- scan column
+        rescanButton.setRectangle(rescanButton.width, BUTTON_HEIGHT, rightX, top)
+        val searchX = rightX + rescanButton.width + GAP
+        searchBox.setRectangle((rightX + rightWidth - searchX).coerceAtLeast(20), 18, searchX, top + 1)
 
-        // The search box shares the last row with the two selection buttons: it belongs directly
-        // above the list it filters, and a row of its own would cost the list another 24 pixels.
-        rescanButton.setRectangle(rescanButton.width, BUTTON_HEIGHT, x, y)
-        clearSelectionButton.setRectangle(
-            clearSelectionButton.width,
-            BUTTON_HEIGHT,
-            x + rescanButton.width + GAP,
-            y,
+        val listTop = top + BUTTON_HEIGHT + GAP
+        val listHeight = (area.bottom() - listTop - GAP).coerceAtLeast(ROW_HEIGHT)
+        listCard.setRectangle(rightWidth, listHeight, rightX, listTop)
+        list.setRectangle(
+            rightWidth - CardWidget.PAD * 2,
+            (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT),
+            rightX + CardWidget.PAD,
+            listTop + CardWidget.HEADER_HEIGHT,
         )
-        val searchX = x + rescanButton.width + clearSelectionButton.width + GAP * 2
-        searchBox.setRectangle((x + contentWidth - searchX).coerceAtLeast(20), 18, searchX, y + 1)
-        y += BUTTON_HEIGHT + GAP * 2
+    }
 
-        val listHeight = (area.bottom() - y - GAP).coerceAtLeast(ROW_HEIGHT)
-        list.setRectangle(contentWidth, listHeight, x, y)
+    /**
+     * Lays buttons into a fixed grid, [columns] wide, every button sharing one equal column width so
+     * rows visibly line up instead of packing ragged at each button's own label width.
+     */
+    private fun gridButtons(startX: Int, startY: Int, width: Int, columns: Int, vararg buttons: ActButtonWidget): Int {
+        val columnWidth = (width - (columns - 1) * GAP) / columns
+        buttons.forEachIndexed { index, button ->
+            val column = index % columns
+            val row = index / columns
+            button.setRectangle(
+                columnWidth,
+                BUTTON_HEIGHT,
+                startX + column * (columnWidth + GAP),
+                startY + row * (BUTTON_HEIGHT + GAP),
+            )
+        }
+        val rows = (buttons.size + columns - 1) / columns
+        return startY + rows * (BUTTON_HEIGHT + GAP)
     }
 
     private fun placeCornerRow(
         startX: Int,
         y: Int,
         label: TextLineWidget,
-        fields: Array<EditBox>,
-        button: Button,
+        fields: Array<ApEditBox>,
     ): Int {
         label.setRectangle(LABEL_WIDTH, TextLineWidget.HEIGHT, startX, y + 5)
         var x = startX + LABEL_WIDTH
@@ -413,11 +485,10 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             field.setRectangle(FIELD_WIDTH, 18, x, y)
             x += FIELD_WIDTH + GAP
         }
-        button.setRectangle(button.width, BUTTON_HEIGHT, x + 2, y - 1)
         return y + 22
     }
 
-    private fun placeButtons(startX: Int, y: Int, vararg buttons: Button): Int {
+    private fun placeButtons(startX: Int, y: Int, vararg buttons: ActButtonWidget): Int {
         var x = startX
         for (button in buttons) {
             button.setRectangle(button.width, BUTTON_HEIGHT, x, y)

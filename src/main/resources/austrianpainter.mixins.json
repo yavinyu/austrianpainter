@@ -4,9 +4,14 @@
   "package": "com.maxisch.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "client.EditBoxAccessor",
     "client.EntityMixin",
+    "client.GuiGraphicsExtractorAccessor",
     "client.LevelEventHandlerMixin",
-    "client.MouseHandlerMixin"
+    "client.MouseHandlerMixin",
+    "client.TooltipBackgroundMixin",
+    "client.TooltipHeightMixin",
+    "client.TooltipTextMixin"
   ],
   "injectors": {
     "defaultRequire": 1
