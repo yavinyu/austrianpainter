@@ -9,6 +9,7 @@ import com.maxisch.client.gui.widget.ApEditBox
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.MouseButtonEvent
+import com.maxisch.client.render.model.RetexturePalette
 import com.maxisch.paint.settings.ApSettings
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
@@ -61,8 +62,18 @@ class BlockPickerScreen(
 
         const val RECENT_LABEL = 0xFFA0A0A0.toInt()
 
+        /**
+         * Excludes blocks with no item (fire, water, portals, ...) - nothing to show an icon for -
+         * and blocks whose model bakes no quads and aren't an [net.minecraft.world.level.block.EntityBlock]
+         * (structure_void, light, ...), which [RetexturePalette] already refuses as donors. Barrier
+         * is the one exception: picking it is how a block gets painted invisible on purpose.
+         */
         val ALL_BLOCKS: List<Block> by lazy {
-            BuiltInRegistries.BLOCK.filter { it != Blocks.AIR }
+            BuiltInRegistries.BLOCK.filter { block ->
+                block != Blocks.AIR &&
+                    !ItemStack(block).isEmpty &&
+                    (block == Blocks.BARRIER || RetexturePalette.of(block).usable)
+            }
         }
     }
 
