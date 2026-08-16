@@ -89,7 +89,13 @@ object PaintSession {
                 val wantedBoss = ApSettings.bossPresetFor(next.key)
                 val store = PresetStores.bosses
                 (!store.isLoaded || wantedBoss != store.activeName).also { changed ->
-                    if (changed) store.load(wantedBoss)
+                    if (changed) {
+                        store.load(wantedBoss)
+                        // P1/P2/P3's rules are keyed by the active boss preset's name - a different
+                        // one just loaded, so the cached layers built from the old one are stale.
+                        DeviceColumns.invalidate()
+                        BossZones.invalidate()
+                    }
                 }
             }
             else -> {
@@ -247,6 +253,10 @@ object PaintSession {
         flush()
         PaintHistory.clear()
         PresetStores.bosses.load(name)
+        // P1/P2/P3's rules are keyed by the active boss preset's name - see the same call in
+        // onScopeChanged above.
+        DeviceColumns.invalidate()
+        BossZones.invalidate()
 
         val room = scope?.takeIf { it.isBoss }?.key
         if (room != null) {
