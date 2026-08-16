@@ -50,12 +50,14 @@ class BlockPickerScreen(
 
         const val FOOTER = 32
 
-
-        /** The recents row plus the label above it. */
-        const val RECENT_HEIGHT = 30
-
         /** How far a strip's background extends past the cells it holds. */
         const val PADDING = 2
+
+        /** Space above the recent strip, for the "Recent" label - matches [recentY]. */
+        const val RECENT_LABEL_GAP = 10
+
+        /** Breathing room between the recent strip's background and the grid below it. */
+        const val SECTION_GAP = 8
 
         const val RECENT_LABEL = 0xFFA0A0A0.toInt()
 
@@ -71,6 +73,7 @@ class BlockPickerScreen(
     private var recent: List<Block> = emptyList()
 
     private lateinit var search: EditBox
+    private lateinit var panel: CardWidget
 
     /**
      * Hidden while a query is typed: the strip would otherwise shift the grid up and down under the
@@ -81,14 +84,32 @@ class BlockPickerScreen(
 
     // Everything is inset inside the overlay panel, not against the screen edge.
     private val recentX get() = gridX
-    private val recentY get() = HEADER + 10
+    private val recentY get() = HEADER + RECENT_LABEL_GAP
+
+    /** The recent strip's label, background and the gap to the grid below it, combined. */
+    private val recentHeight get() = RECENT_LABEL_GAP + CELL + PADDING + SECTION_GAP
 
     private val gridX get() = MARGIN + CardWidget.PAD
-    private val gridY get() = HEADER + if (showRecent) RECENT_HEIGHT else 0
+    private val gridY get() = HEADER + if (showRecent) recentHeight else 0
     private val gridWidth get() = width - (MARGIN + CardWidget.PAD) * 2
     private val gridHeight get() = height - gridY - FOOTER - MARGIN
     private val columns get() = (gridWidth / CELL).coerceAtLeast(1)
+
+    /** How many rows fit in the space available - the *viewport's* capacity, not how many the
+     *  current [filtered] list needs. Scroll math must keep using this even when [visibleRows] is
+     *  smaller, so a still-long result set keeps scrolling correctly. */
     private val rows get() = (gridHeight / CELL).coerceAtLeast(1)
+
+    /** How many rows [filtered] actually needs, ignoring viewport capacity. */
+    private val neededRows get() = if (filtered.isEmpty()) 1 else (filtered.size + columns - 1) / columns
+
+    /** What the grid actually draws/hit-tests: never more than fits, never more than is needed -
+     *  so a short result list doesn't leave the rest of the viewport's background empty. */
+    private val visibleRows get() = neededRows.coerceAtMost(rows)
+
+    /** The overlay panel's height, hugging [visibleRows] instead of always claiming the full
+     *  available screen space - reduces to the original fixed formula when [visibleRows] == [rows]. */
+    private val panelHeight get() = (gridY - PANEL_TOP) + visibleRows * CELL + FOOTER
 
     override fun init() {
         PainterFrame.measure(height)
@@ -107,11 +128,11 @@ class BlockPickerScreen(
 
         // The picker is an overlay panel rather than a bare full-screen grid: it reads as something
         // opened on top of the tool, which is what it is, and the armed bar stays legible above it.
-        addRenderableWidget(
+        // Sized in applyFilter() instead of here - it needs to hug whatever filtered.size is, not
+        // just the space this screen happens to have.
+        panel = addRenderableWidget(
             CardWidget(title) { Component.literal("${filtered.size} / ${ALL_BLOCKS.size}") },
-        ).also {
-            it.setRectangle(width - MARGIN * 2, height - PANEL_TOP - MARGIN, MARGIN, PANEL_TOP)
-        }
+        )
 
         val cancelWidth = 70
         val searchY = PANEL_TOP + CardWidget.HEADER_HEIGHT + 3
@@ -148,6 +169,7 @@ class BlockPickerScreen(
             ALL_BLOCKS.filter { BlockSearch.matches(it, normalized) }
         }
         scrollRow = 0
+        panel.setRectangle(width - MARGIN * 2, panelHeight, MARGIN, PANEL_TOP)
     }
 
     // ------------------------------------------------------------------ input
@@ -183,7 +205,7 @@ class BlockPickerScreen(
         if (mouseX < gridX || mouseY < gridY) return null
         val col = ((mouseX - gridX) / CELL).toInt()
         val row = ((mouseY - gridY) / CELL).toInt()
-        if (col !in 0 until columns || row !in 0 until rows) return null
+        if (col !in 0 until columns || row !in 0 until visibleRows) return null
         return filtered.getOrNull((scrollRow + row) * columns + col)
     }
 
@@ -207,10 +229,10 @@ class BlockPickerScreen(
         } else {
             null
         }
-        strip(graphics, gridX, gridY, columns * CELL, rows * CELL, hovered)
+        strip(graphics, gridX, gridY, columns * CELL, visibleRows * CELL, hovered)
 
-        graphics.enableScissor(gridX, gridY, gridX + columns * CELL, gridY + rows * CELL)
-        for (row in 0 until rows) {
+        graphics.enableScissor(gridX, gridY, gridX + columns * CELL, gridY + visibleRows * CELL)
+        for (row in 0 until visibleRows) {
             for (col in 0 until columns) {
                 val block = filtered.getOrNull((scrollRow + row) * columns + col) ?: continue
                 drawCell(graphics, block, gridX + col * CELL, gridY + row * CELL)
