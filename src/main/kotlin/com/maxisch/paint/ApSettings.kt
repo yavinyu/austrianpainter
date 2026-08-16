@@ -103,9 +103,6 @@ object ApSettings {
     /** Repaints the F7 phase-2 device pillars; see [DeviceColumns]. */
     var deviceEnabled: Boolean = false
 
-    /** One palette roll per column, so a whole pillar is one colour. Off rolls per block. */
-    var deviceSeedPerColumn: Boolean = true
-
     /**
      * Keyed `"<array>.<source>"`. A key that is present with a null value is a rule the player
      * turned off, which is not the same as one that was never written - an absent key falls back
@@ -132,12 +129,18 @@ object ApSettings {
         save()
     }
 
-    // ---------------------------------------------------------------- boss zones
+    // ---------------------------------------------------------------- boss zones (P1 conveyer, P3 devices)
 
+    /** P3 - the S1-S4 zones. P1 (the conveyer/[BossZone.PILLARS] zone) has its own [conveyorEnabled]:
+     *  they are two independent boss phases, not one feature with a shared switch. */
     var zonesEnabled: Boolean = false
 
+    /** P1 - the conveyer zone ([BossZone.PILLARS]). */
+    var conveyorEnabled: Boolean = false
+
     /** Keyed "<zone>.<blockId>[.lit|.unlit]", same present-with-null-means-off contract as
-     *  [deviceRules]. */
+     *  [deviceRules]. Shared by P1 and P3 - the two are the same underlying rule map, only their
+     *  enabled flag and their reset scope (see below) are independent. */
     private val zoneRules = LinkedHashMap<String, AreaTarget?>()
 
     private fun zoneRuleKey(rule: ZoneSourceRule): String {
@@ -161,8 +164,17 @@ object ApSettings {
         save()
     }
 
+    private val conveyorKeyPrefix get() = "${BossZone.PILLARS.key}."
+
+    /** P1 only. */
+    fun resetConveyorRules() {
+        zoneRules.keys.removeAll { it.startsWith(conveyorKeyPrefix) }
+        save()
+    }
+
+    /** P3 only - every zone rule that is not [BossZone.PILLARS]. */
     fun resetZoneRules() {
-        zoneRules.clear()
+        zoneRules.keys.removeAll { !it.startsWith(conveyorKeyPrefix) }
         save()
     }
 
@@ -358,7 +370,6 @@ object ApSettings {
             deviceRules.clear()
             root.getAsJsonObject("deviceColumns")?.let { device ->
                 deviceEnabled = device.get("enabled")?.asBoolean ?: false
-                deviceSeedPerColumn = device.get("seedPerColumn")?.asBoolean ?: true
                 device.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
                     val raw = value.asString
                     deviceRules[key] =
@@ -370,6 +381,10 @@ object ApSettings {
             zoneRules.clear()
             root.getAsJsonObject("bossZones")?.let { zones ->
                 zonesEnabled = zones.get("enabled")?.asBoolean ?: false
+                // conveyorEnabled is new; a settings file from before P1 and P3 split falls back to
+                // whatever the old shared "enabled" was, so an existing save does not silently lose
+                // its conveyer rules on update.
+                conveyorEnabled = zones.get("conveyorEnabled")?.asBoolean ?: zonesEnabled
                 zones.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
                     val raw = value.asString
                     zoneRules[key] =
@@ -437,7 +452,6 @@ object ApSettings {
                 "deviceColumns",
                 JsonObject().apply {
                     addProperty("enabled", deviceEnabled)
-                    addProperty("seedPerColumn", deviceSeedPerColumn)
                     val rules = JsonObject()
                     // Every rule is written, including the ones still on their default, so the file
                     // shows what the feature will actually do rather than only what was changed.
@@ -458,6 +472,7 @@ object ApSettings {
                 "bossZones",
                 JsonObject().apply {
                     addProperty("enabled", zonesEnabled)
+                    addProperty("conveyorEnabled", conveyorEnabled)
                     val rules = JsonObject()
                     for (rule in BossZones.RULES) {
                         val target = zoneRule(rule)

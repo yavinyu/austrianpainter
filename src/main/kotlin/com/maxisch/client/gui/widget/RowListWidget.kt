@@ -1,5 +1,8 @@
 package com.maxisch.client.gui.widget
 
+import com.maxisch.client.gui.Theme
+import com.maxisch.client.gui.nvgSurface
+import com.maxisch.client.render.render2d.NVGUtils
 import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractWidget
@@ -28,11 +31,14 @@ class RowListWidget<T>(
 ) : AbstractWidget(x, y, width, height, CommonComponents.EMPTY) {
 
     companion object {
-        const val BACKGROUND = 0x60000000
-        const val HOVER = 0x60FFFFFF
-        const val SELECTED = 0x8055FF55.toInt()
-        const val DELETE_HOVER = 0x60FF5555
-        const val EMPTY_TEXT = 0xFF808080.toInt()
+        const val BACKGROUND = Theme.LIST_BACKGROUND
+        const val HOVER = Theme.HOVER
+        const val SELECTED = Theme.SELECTED
+        const val DELETE_HOVER = 0x60FF6B6B
+        const val EMPTY_TEXT = Theme.TEXT_DIM
+
+        /** The background is inset around the rows on every side; see [extractWidgetRenderState]. */
+        private const val PADDING = 2
     }
 
     var rows: List<T> = emptyList()
@@ -59,6 +65,9 @@ class RowListWidget<T>(
      * Takes precedence over [onRowClick] when set, so the single-select lists need no changes.
      */
     var onRowSelect: ((row: T, index: Int, ctrl: Boolean, shift: Boolean) -> Unit)? = null
+
+    /** Fired in addition to [onRowSelect]/[onRowClick] when the click is the second of a double click. */
+    var onRowDoubleClick: ((T) -> Unit)? = null
 
     /**
      * Wheel over a row. Returning true consumes the event so the list does not also scroll - that
@@ -104,9 +113,10 @@ class RowListWidget<T>(
         val select = onRowSelect
         if (select != null) {
             select(row, index, held(InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL), held(InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT))
-            return
+        } else {
+            onRowClick?.invoke(row)
         }
-        onRowClick?.invoke(row)
+        if (doubled) onRowDoubleClick?.invoke(row)
     }
 
     /** The click event carries no modifiers in 26.2, so ask the window directly. */
@@ -142,25 +152,58 @@ class RowListWidget<T>(
         // which changes visibleRows and so the scroll ceiling.
         clampScroll()
 
-        graphics.fill(x - 2, y - 2, x + width + 2, y + height + 2, BACKGROUND)
+        // The background and the row fills go through NanoVG in one surface; the row contents keep
+        // drawing vanilla afterwards, which puts them in a layer above it (see NvgBridge).
+        nvgSurface(
+            graphics, x - PADDING, y - PADDING, width + PADDING * 2, height + PADDING * 2,
+            nvg = {
+                NVGUtils.drawRect(
+                    (x - PADDING).toFloat(),
+                    (y - PADDING).toFloat(),
+                    (width + PADDING * 2).toFloat(),
+                    (height + PADDING * 2).toFloat(),
+                    Theme.RADIUS,
+                    Theme.c(BACKGROUND),
+                )
+                // Square fills, not rounded: rows sit flush against each other, and the padding keeps
+                // them clear of the background's own corners.
+                forEachVisibleRow(mouseX, mouseY) { row, rowY, hovered ->
+                    fillColor(row, hovered)?.let {
+                        NVGUtils.drawRect(x.toFloat(), rowY.toFloat(), width.toFloat(), rowHeight.toFloat(), Theme.c(it))
+                    }
+                }
+            },
+            vanilla = {
+                graphics.fill(x - PADDING, y - PADDING, x + width + PADDING, y + height + PADDING, BACKGROUND)
+                forEachVisibleRow(mouseX, mouseY) { row, rowY, hovered ->
+                    fillColor(row, hovered)?.let {
+                        graphics.fill(x, rowY, x + width, rowY + rowHeight, it)
+                    }
+                }
+            },
+        )
 
         if (rows.isEmpty()) {
-            graphics.text(font, emptyMessage(), x + 2, y + 3, emptyColor)
+            val message = emptyMessage()
+            nvgSurface(
+                graphics, x, y, width, height,
+                nvg = {
+                    NVGUtils.drawText(
+                        message.string,
+                        (x + 2).toFloat(),
+                        (y + 3).toFloat(),
+                        Theme.TEXT_SIZE,
+                        Theme.c(emptyColor),
+                        Theme.body,
+                    )
+                },
+                vanilla = { graphics.text(font, message, x + 2, y + 3, emptyColor) },
+            )
             return
         }
 
         graphics.enableScissor(x, y, x + width, y + height)
-        for (index in 0 until visibleRows) {
-            val row = rows.getOrNull(scroll + index) ?: break
-            val rowY = y + index * rowHeight
-            val hovered = mouseX in x..(x + width) && mouseY in rowY until rowY + rowHeight
-
-            if (isSelected(row)) {
-                graphics.fill(x, rowY, x + width, rowY + rowHeight, SELECTED)
-            } else if (hovered) {
-                graphics.fill(x, rowY, x + width, rowY + rowHeight, hoverColor)
-            }
-
+        forEachVisibleRow(mouseX, mouseY) { row, rowY, hovered ->
             drawRow(graphics, row, x, rowY, hovered)
         }
         graphics.disableScissor()
@@ -170,6 +213,28 @@ class RowListWidget<T>(
                 graphics.setTooltipForNextFrame(tooltip(), mouseX, mouseY)
             }
         }
+    }
+
+    /**
+     * Walks the rows currently on screen, handing each its top edge and whether the cursor is on it.
+     *
+     * Both the fill pass and the content pass need the same walk, and they run in separate blocks
+     * now that the fills go through NanoVG - keeping the row-index arithmetic in one place is what
+     * stops the two passes drifting apart.
+     */
+    private inline fun forEachVisibleRow(mouseX: Int, mouseY: Int, body: (T, Int, Boolean) -> Unit) {
+        for (index in 0 until visibleRows) {
+            val row = rows.getOrNull(scroll + index) ?: break
+            val rowY = y + index * rowHeight
+            body(row, rowY, mouseX in x..(x + width) && mouseY in rowY until rowY + rowHeight)
+        }
+    }
+
+    /** The fill behind a row, or null when it takes neither the selection nor the hover. */
+    private fun fillColor(row: T, hovered: Boolean): Int? = when {
+        isSelected(row) -> SELECTED
+        hovered -> hoverColor
+        else -> null
     }
 
     /** Rows carry no fixed label, so there is nothing stable to narrate here. */

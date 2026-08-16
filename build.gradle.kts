@@ -113,12 +113,33 @@ dependencies {
 
     implementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_version")}")
 
-    // Settings screen. Hard dependency.
-    implementation("dev.isxander:yet-another-config-lib:${project.property("yacl_version")}")
+    // NanoVG, the 2D renderer com.maxisch.render.render2d draws through. Minecraft already puts the
+    // LWJGL core and its natives on the classpath at this exact version, so only the nanovg module
+    // is added - a second core would be a conflict, not an addition, hence isTransitive = false.
+    //
+    // `include` as well as `implementation`, unlike every other dependency here: Minecraft ships no
+    // nanovg at all, so a jar built with only `implementation` runs in dev (where Gradle supplies
+    // it) and throws NoClassDefFoundError for every actual user. Loom nests these as jar-in-jar and
+    // the loader puts them on the classpath, where LWJGL's SharedLibraryLoader finds the natives.
+    //
+    // Plain `implementation` rather than `modImplementation` for a different reason than the mods
+    // above: this is not a mod and not obfuscated, so there is nothing for loom to remap either way.
+    //
+    // The classifiers are exactly the ones Minecraft ships for its own LWJGL modules, so the mod
+    // runs anywhere vanilla does.
+    val lwjglVersion = project.property("lwjgl_version") as String
+    val lwjglNatives = listOf(
+        "natives-windows", "natives-windows-arm64", "natives-windows-x86",
+        "natives-linux", "natives-macos", "natives-macos-arm64",
+    )
 
-    // Only needed to compile the ModMenuApi entrypoint; the mod runs fine without it installed.
-    compileOnly("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
-    localRuntime("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
+    implementation("org.lwjgl:lwjgl-nanovg:$lwjglVersion") { isTransitive = false }
+    include("org.lwjgl:lwjgl-nanovg:$lwjglVersion") { isTransitive = false }
+
+    lwjglNatives.forEach { classifier ->
+        implementation("org.lwjgl:lwjgl-nanovg:$lwjglVersion:$classifier") { isTransitive = false }
+        include("org.lwjgl:lwjgl-nanovg:$lwjglVersion:$classifier") { isTransitive = false }
+    }
 
     // Dev-run only, never shipped: logs the dev client into a real Microsoft account so it can join
     // online-mode servers. See the client run config for how it is hooked up.
@@ -138,6 +159,27 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+// LWJGL refuses to load when a module binding and the core disagree on version, and Minecraft is
+// what supplies the core - so a Minecraft bump that moves LWJGL silently invalidates lwjgl_version
+// without breaking anything until a user opens the paint UI. Resolving the classpath at
+// configuration time would be circular, so this checks at execution time and hangs off `check`.
+val checkLwjglVersion = tasks.register("checkLwjglVersion") {
+    val expected = project.property("lwjgl_version") as String
+    val compileClasspath = configurations.compileClasspath
+    doLast {
+        val core = compileClasspath.get().resolvedConfiguration.lenientConfiguration
+            .allModuleDependencies
+            .firstOrNull { it.moduleGroup == "org.lwjgl" && it.moduleName == "lwjgl" }
+            ?: error("org.lwjgl:lwjgl is not on the compile classpath - did Minecraft stop shipping it?")
+        check(core.moduleVersion == expected) {
+            "lwjgl_version=$expected but Minecraft ships org.lwjgl:lwjgl:${core.moduleVersion}. " +
+                "Set lwjgl_version=${core.moduleVersion} in gradle.properties."
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(checkLwjglVersion) }
 
 tasks.processResources {
     inputs.property("version", project.version)
@@ -197,6 +239,11 @@ tasks.withType<KotlinCompile>().configureEach {
 tasks.jar {
     from("LICENSE.txt") {
         rename { "LICENSE_${project.base.archivesName.get()}" }
+    }
+    // The bundled NanoVG renderer is BSD-3-Clause and the bundled fonts are OFL; both licences
+    // require their notice to travel with a binary redistribution, and the jar is one.
+    from("THIRD-PARTY-NOTICES.txt") {
+        rename { "THIRD-PARTY-NOTICES_${project.base.archivesName.get()}.txt" }
     }
 }
 
