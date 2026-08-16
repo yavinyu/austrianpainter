@@ -5,6 +5,7 @@ import com.maxisch.client.gui.BlockPickerScreen
 import com.maxisch.client.gui.BlockSearch
 import com.maxisch.client.gui.PainterScreen
 import com.maxisch.client.gui.widget.ActButtonWidget
+import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.CoordinatePadWidget
@@ -252,7 +253,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
                         logic.targetName(target),
                     )
                 }
-                graphics.text(font, label, x + 22, y + 3, 0xFFFFFFFF.toInt())
+                RowContent.label(graphics, x + 22, y, ROW_HEIGHT, x + width, text = label)
             }
         },
     )

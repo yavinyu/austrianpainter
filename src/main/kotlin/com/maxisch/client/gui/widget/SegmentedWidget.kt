@@ -78,11 +78,12 @@ class SegmentedWidget(
                     Theme.c(Theme.RULE),
                 )
 
+                val labelY = y + (height - Theme.textHeight(Theme.TEXT_SIZE_SMALL)) / 2f
                 options.forEachIndexed { index, option ->
                     NVGUtils.drawCenteredText(
                         option.string,
                         x + segmentWidth * (index + 0.5f),
-                        (y + (height - font.lineHeight) / 2 + 1).toFloat(),
+                        labelY,
                         Theme.TEXT_SIZE_SMALL,
                         Theme.c(if (index == selected) Theme.AMBER else Theme.MUTED),
                         Theme.body,

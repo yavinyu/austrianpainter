@@ -31,8 +31,6 @@ class ApEditBox(
     message: Component,
 ) : EditBox(font, x, y, width, height, message) {
 
-    private val lineHeight get() = net.minecraft.client.Minecraft.getInstance().font.lineHeight
-
     private companion object {
         const val PAD = 4
 
@@ -75,7 +73,7 @@ class ApEditBox(
         val border = if (isFocused) Theme.AMBER else Theme.RULE
         val innerWidth = width - PAD * 2
         val textX = (x + PAD).toFloat()
-        val textY = (y + (height - lineHeight) / 2 + 1).toFloat()
+        val textY = y + (height - Theme.textHeight()) / 2f
 
         // Vanilla scrolls by character index; everything below is measured from that first visible
         // character, so a long value scrolls exactly as vanilla decided it should.

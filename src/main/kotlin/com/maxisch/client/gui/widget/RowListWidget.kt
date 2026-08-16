@@ -184,7 +184,21 @@ class RowListWidget<T>(
         )
 
         if (rows.isEmpty()) {
-            graphics.text(font, emptyMessage(), x + 2, y + 3, emptyColor)
+            val message = emptyMessage()
+            nvgSurface(
+                graphics, x, y, width, height,
+                nvg = {
+                    NVGUtils.drawText(
+                        message.string,
+                        (x + 2).toFloat(),
+                        (y + 3).toFloat(),
+                        Theme.TEXT_SIZE,
+                        Theme.c(emptyColor),
+                        Theme.body,
+                    )
+                },
+                vanilla = { graphics.text(font, message, x + 2, y + 3, emptyColor) },
+            )
             return
         }
 

@@ -1,6 +1,5 @@
 package com.maxisch.client
 
-import com.maxisch.client.gui.NvgProbeScreen
 import com.maxisch.client.render.CullDiagnostics
 import com.maxisch.dungeon.DeviceColumnData
 import com.maxisch.dungeon.DungeonLocation
@@ -145,20 +144,6 @@ object PaintCommands {
                     .then(
                         ClientCommands.literal("redo").executes { context ->
                             context.source.sendFeedback(PaintStorage.redo())
-                            1
-                        },
-                    )
-                    .then(
-                        // Development aid for the NanoVG port; delete with NvgProbeScreen once the
-                        // transform is confirmed at every GUI scale.
-                        ClientCommands.literal("nvgprobe").executes { context ->
-                            val minecraft = net.minecraft.client.Minecraft.getInstance()
-                            // Deferred: the command runs inside the chat screen's own tick, and
-                            // setScreen from there is overwritten when chat closes itself after.
-                            minecraft.schedule { minecraft.setScreenAndShow(NvgProbeScreen(null)) }
-                            context.source.sendFeedback(
-                                Component.literal("Opening NanoVG probe - change GUI scale and resize while it is open"),
-                            )
                             1
                         },
                     )

@@ -114,21 +114,22 @@ object RowContent {
         trailing: Component? = null,
         colour: Int = Theme.INK,
     ) {
-        val textY = y + (rowHeight - font.lineHeight) / 2 + 1
         val trailingWidth = trailing?.let { Theme.textWidth(it.string) } ?: 0f
         val available = (rowRight - PAD - trailingWidth - x).toInt()
 
         nvgSurface(
             graphics, x, y, (rowRight - x).coerceAtLeast(1), rowHeight,
             nvg = {
+                val textY = y + (rowHeight - Theme.textHeight()) / 2f
                 NVGUtils.pushScissor(x.toFloat(), y.toFloat(), available.coerceAtLeast(1).toFloat(), rowHeight.toFloat())
-                NVGUtils.drawText(text.string, x.toFloat(), textY.toFloat(), Theme.TEXT_SIZE, Theme.c(colour), Theme.body)
+                NVGUtils.drawText(text.string, x.toFloat(), textY, Theme.TEXT_SIZE, Theme.c(colour), Theme.body)
                 NVGUtils.popScissor()
                 trailing?.let {
+                    val trailingY = y + (rowHeight - Theme.textHeight(Theme.TEXT_SIZE_SMALL)) / 2f
                     NVGUtils.drawText(
                         it.string,
                         rowRight - PAD - trailingWidth,
-                        textY.toFloat(),
+                        trailingY,
                         Theme.TEXT_SIZE_SMALL,
                         Theme.c(Theme.MUTED),
                         Theme.body,
@@ -136,6 +137,7 @@ object RowContent {
                 }
             },
             vanilla = {
+                val textY = y + (rowHeight - font.lineHeight) / 2 + 1
                 graphics.text(font, text, x, textY, colour)
                 trailing?.let {
                     graphics.text(font, it, rowRight - PAD - font.width(it), textY, Theme.MUTED)

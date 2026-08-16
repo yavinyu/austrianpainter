@@ -26,13 +26,6 @@ class TextLineWidget(
 
     companion object {
         const val HEIGHT = 10
-
-        /**
-         * NanoVG is told to align text from its top, as vanilla does, but Josefin carries more
-         * leading above its caps than Minecraft's bitmap font. Without this the line sits visibly
-         * lower than the vanilla widgets it shares a row with.
-         */
-        const val BASELINE_NUDGE = -1f
     }
 
     init {
@@ -58,14 +51,8 @@ class TextLineWidget(
                 // `message.string` flattens any styling the component carries. These lines are all
                 // plain translatables coloured by [color], so there is none to lose - a widget that
                 // does carry styling must stay vanilla rather than come through here.
-                NVGUtils.drawText(
-                    message.string,
-                    x.toFloat(),
-                    y.toFloat() + BASELINE_NUDGE,
-                    Theme.TEXT_SIZE,
-                    Theme.c(color),
-                    Theme.body,
-                )
+                val textY = y + (HEIGHT - Theme.textHeight()) / 2f
+                NVGUtils.drawText(message.string, x.toFloat(), textY, Theme.TEXT_SIZE, Theme.c(color), Theme.body)
             },
             vanilla = { graphics.text(Minecraft.getInstance().font, message, x, y, color) },
         )

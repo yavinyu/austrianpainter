@@ -170,7 +170,7 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
                 } else {
                     Component.translatable("austrianpainter.presets.row", name, store.entryCount(name))
                 }
-                graphics.text(font, label, x + 4, y + 3, 0xFFFFFFFF.toInt())
+                RowContent.label(graphics, x + 4, y, ROW_HEIGHT, x + width, text = label)
             }
         },
     )
@@ -187,7 +187,7 @@ class PresetsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
                 }
             }
             drawRow = { graphics, line, x, y, _ ->
-                graphics.text(font, line, x + 4, y + 3, 0xFFFFFFFF.toInt())
+                RowContent.label(graphics, x + 4, y, ROW_HEIGHT, x + width, text = line)
             }
         },
     )

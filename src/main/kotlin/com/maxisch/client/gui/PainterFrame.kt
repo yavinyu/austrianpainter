@@ -14,6 +14,7 @@ import net.minecraft.client.gui.narration.NarrationElementOutput
 import net.minecraft.network.chat.CommonComponents
 import net.minecraft.network.chat.Component
 import net.minecraft.world.item.ItemStack
+import kotlin.math.roundToInt
 
 /**
  * The paint screen's frame: the armed-state bar across the top and the status strip along the
@@ -302,13 +303,12 @@ class PainterFrame(
             },
         )
 
-        val pillTextY = pillY + (PILL_HEIGHT - font.lineHeight) / 2 + 1
-
         // A second surface for the text, over the chrome laid down above. The labels are a size down
         // from their values, which is what makes a slot read as one thing rather than two lines.
         nvgSurface(
             graphics, 0, 0, screenWidth, ARMED_HEIGHT,
             nvg = {
+                val pillTextY = (pillY + (PILL_HEIGHT - Theme.textHeight(Theme.TEXT_SIZE_SMALL)) / 2f).roundToInt()
                 text(wordmark, PAD_X, LABEL_Y - 2, Theme.INK, Theme.TEXT_SIZE_LARGE)
                 text(subtitle, PAD_X, VALUE_Y, Theme.DIM, Theme.TEXT_SIZE_SMALL)
                 slots.forEach { slotEntry ->
@@ -320,6 +320,7 @@ class PainterFrame(
                 text(keyPill, keyPillX + PILL_PAD_X, pillTextY, Theme.MUTED, Theme.TEXT_SIZE_SMALL)
             },
             vanilla = {
+                val pillTextY = pillY + (PILL_HEIGHT - font.lineHeight) / 2 + 1
                 graphics.text(font, wordmark, PAD_X, LABEL_Y, Theme.INK)
                 graphics.text(font, subtitle, PAD_X, VALUE_Y, Theme.DIM)
                 slots.forEach { slotEntry ->
@@ -381,11 +382,16 @@ class PainterFrame(
         )
 
         val message = status() ?: return
-        val statusY = footerY + (FOOTER_HEIGHT - font.lineHeight) / 2
         nvgSurface(
             graphics, 0, footerY, screenWidth, FOOTER_HEIGHT,
-            nvg = { text(message, PAD_X, statusY, Theme.GREEN) },
-            vanilla = { graphics.text(font, message, PAD_X, statusY, Theme.GREEN) },
+            nvg = {
+                val statusY = (footerY + (FOOTER_HEIGHT - Theme.textHeight()) / 2f).roundToInt()
+                text(message, PAD_X, statusY, Theme.GREEN)
+            },
+            vanilla = {
+                val statusY = footerY + (FOOTER_HEIGHT - font.lineHeight) / 2
+                graphics.text(font, message, PAD_X, statusY, Theme.GREEN)
+            },
         )
     }
 

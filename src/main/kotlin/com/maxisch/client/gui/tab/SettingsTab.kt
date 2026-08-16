@@ -27,8 +27,8 @@ import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.network.chat.Component
 
 /**
- * Every option the YACL settings screen offers, rebuilt as hand-rolled widgets so it can live as a
- * tab instead of its own screen. Laid out as four drawn panels rather than a uniform grid: a wide
+ * Every option the old YACL settings screen used to offer, rebuilt as hand-rolled widgets so it can
+ * live as a tab instead of its own screen. Laid out as four drawn panels rather than a uniform grid: a wide
  * Colours band carries this tab's one deliberately prominent element (this is a painting mod, so
  * colour editing gets more room and a live self-coloured accent bar instead of being boxed into a
  * column the same size as everything else), General sits beside it, Overlay and Dungeon share a row
@@ -40,8 +40,8 @@ import net.minecraft.network.chat.Component
  * Save/Cancel gate at all, so a deferred preset swap would be the one inconsistent control on it;
  * the [PresetsTab] quick-swap cycler this mirrors already applies immediately with no confirmation.
  *
- * The old YACL screen ([com.maxisch.client.gui.ApSettingsScreen]) is untouched and stays reachable
- * from ModMenu's config button - this tab is the primary surface, not a replacement for it.
+ * The YACL screen this replaced is gone, along with the ModMenu entry point that opened it; this
+ * tab is the only settings surface now.
  */
 class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.settings") {
 
@@ -67,9 +67,6 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         /** Marks a hex field whose text cannot be parsed. */
         val RED = Theme.RED
         const val WHITE = 0xFFFFFFFF.toInt()
-
-        /** Matches the boss-dungeon purple [DungeonTab] already uses for its device-array accent. */
-        const val DUNGEON_ACCENT = 0xFFAA00AA.toInt()
     }
 
     private val font get() = Minecraft.getInstance().font
@@ -223,7 +220,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     // ------------------------------------------------------------------ overlay panel
 
     private val overlayToggle =
-        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.showPaintedOverlay, ApSettings.paintedOverlayColor) { toggleOverlay() })
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.showPaintedOverlay, GREY) { toggleOverlay() })
     private val overlayLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
         it.message = Component.translatable("austrianpainter.settings.overlay_show")
     }
@@ -246,7 +243,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     // ------------------------------------------------------------------ dungeon panel
 
     private val roomScopeToggle =
-        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.dungeonRoomScope, DUNGEON_ACCENT) { toggleRoomScope() })
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.dungeonRoomScope, GREY) { toggleRoomScope() })
     private val roomScopeLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
         it.message = Component.translatable("austrianpainter.settings.room_scope")
     }
@@ -563,7 +560,6 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         brushStepper.value = PaintBrush.radius
 
         overlayToggle.checked = ApSettings.showPaintedOverlay
-        overlayToggle.accent = ApSettings.paintedOverlayColor
         overlayRadiusStepper.value = ApSettings.paintedOverlayRadius
 
         roomScopeToggle.checked = ApSettings.dungeonRoomScope

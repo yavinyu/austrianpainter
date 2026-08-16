@@ -32,9 +32,9 @@ import net.minecraft.world.level.block.Block
  *
  * Everything the mod can do is one tab click away rather than several screens deep, and results are
  * reported on a status line here instead of in chat, which the player cannot see while a screen is
- * open. The YACL screen ([ApSettingsScreen]) still exists as ModMenu's config-button target, but the
- * Settings tab here is the primary way to reach every option. Block picking stays a modal
- * ([BlockPickerScreen]) - the picker needs the full screen height for its grid.
+ * open. Settings used to also be reachable through a separate YACL screen behind ModMenu; that
+ * screen is gone, and the Settings tab here is now the only way to reach every option. Block
+ * picking stays a modal ([BlockPickerScreen]) - the picker needs the full screen height for its grid.
  */
 class PainterScreen private constructor(parent: Screen?) :
     ApScreen(Component.translatable("austrianpainter.screen.title"), parent) {
