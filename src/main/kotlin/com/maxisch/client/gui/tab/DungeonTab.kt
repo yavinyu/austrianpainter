@@ -29,11 +29,18 @@ import net.minecraft.network.chat.Component
 import net.minecraft.world.item.ItemStack
 
 /**
- * Every F7/M7 repaint mechanic in one place: the four device-column arrays on the left, the five
- * Sadan boss-zone rules (Pillars, S1-S4) on the right. Two independent lists side by side rather
- * than one long stacked one, because they are genuinely two separate rule sets that each need
- * their own enable/reset controls - a single shared editor row at the bottom acts on whichever
- * list was clicked most recently.
+ * Every F7/M7 repaint mechanic in one place, presented as Sadan's three real boss phases rather than
+ * the two implementation-shaped groups this mod originally split them into:
+ *
+ * - **P1 "Conveyer"** - the static coal-block/player-head zone (`BossZone.PILLARS`).
+ * - **P2 "Pillars"** - the four moving diorite arrays (`DeviceArray`/[DeviceColumns]).
+ * - **P3 "Devices"** - the four remaining boss zones (`BossZone.S1`-`S4`).
+ *
+ * Three independent lists side by side rather than one long stacked one - they are three genuinely
+ * separate rule sets, each with its own Live toggle and Reset, and a single shared editor row at the
+ * bottom acts on whichever list was clicked most recently. P1 and P3 both draw from
+ * [BossZones.RULES] (filtered by zone) and share its one rule map underneath - only their Live flag
+ * and Reset scope are independent, see [ApSettings.conveyorEnabled]/[ApSettings.zonesEnabled].
  *
  * Edits batch into one rebuild on [onHidden] rather than one per click, same reasoning the two
  * screens this tab replaces already had: rebuilding the layer costs a full view rebuild.
@@ -51,14 +58,14 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         const val BUTTON_HEIGHT = 16
         const val GAP = 4
 
-        // Device-array accents match each array's real in-game glass colour.
+        // P2 array accents match each array's real in-game glass colour.
         const val DEVICE_GREEN = 0xFF55FF55.toInt()
         const val DEVICE_YELLOW = 0xFFFFFF55.toInt()
         const val DEVICE_PURPLE = 0xFFAA00AA.toInt()
         const val DEVICE_RED = 0xFFFF5555.toInt()
 
-        // Zone accents are a distinct 5-way palette, not literal block colours - the zones have no
-        // single colour identity the way the device arrays do.
+        // Zone accents (P1 + P3) are a distinct 5-way palette, not literal block colours - the
+        // zones have no single colour identity the way the P2 arrays do.
         const val ZONE_PILLARS = 0xFF808080.toInt()
         const val ZONE_S1 = 0xFF55FFFF.toInt()
         const val ZONE_S2 = 0xFFFF5555.toInt()
@@ -79,21 +86,51 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     private val font get() = Minecraft.getInstance().font
 
-    // ------------------------------------------------------------------ widgets - device panel
+    // ------------------------------------------------------------------ widgets - P1 conveyer
 
     // Cards first: they are the ground their lists draw on top of.
-    private val deviceCard = add(
-        CardWidget(Component.translatable("austrianpainter.card.devices")) {
+    private val p1Card = add(
+        CardWidget(Component.translatable("austrianpainter.card.p1")) {
+            Component.literal(BossZones.RULES.count { it.zone == BossZone.PILLARS }.toString())
+        },
+    )
+    private val p2Card = add(
+        CardWidget(Component.translatable("austrianpainter.card.p2")) {
             Component.literal(DungeonRulesLogic.deviceRules.size.toString())
         },
     )
-    private val zoneCard = add(
-        CardWidget(Component.translatable("austrianpainter.card.zones")) {
-            Component.literal(BossZones.RULES.size.toString())
+    private val p3Card = add(
+        CardWidget(Component.translatable("austrianpainter.card.p3")) {
+            Component.literal(BossZones.RULES.count { it.zone != BossZone.PILLARS }.toString())
         },
     )
 
-    private val deviceHeaderLine = add(TextLineWidget(0, 0, 0, GREY))
+    private val p1HeaderLine = add(TextLineWidget(0, 0, 0, GREY))
+
+    private val conveyorEnableButton = add(
+        ActButtonWidget.builder(conveyorEnableLabel()) { toggleConveyorEnabled() }
+            .width(90)
+            .tooltip(Tooltip.create(Component.translatable("austrianpainter.zones.live_hint")))
+            .build(),
+    )
+
+    private val conveyorResetButton = add(
+        ActButtonWidget.builder(Component.translatable("austrianpainter.conveyor.reset")) { resetConveyorRules() }
+            .width(110).build(),
+    )
+
+    private val p1List = add(
+        RowListWidget<ZoneSourceRule>(0, 0, 0, 0, ROW_HEIGHT).apply {
+            rows = BossZones.RULES.filter { it.zone == BossZone.PILLARS }
+            isSelected = { (selection as? Selection.Zone)?.rule == it }
+            onRowClick = { rule -> selection = Selection.Zone(rule); refreshEditor() }
+            drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y, showZoneTag = false) }
+        },
+    )
+
+    // ------------------------------------------------------------------ widgets - P2 pillars
+
+    private val p2HeaderLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val deviceEnableButton = add(
         ActButtonWidget.builder(deviceEnableLabel()) { toggleDeviceEnabled() }
@@ -104,19 +141,12 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             .build(),
     )
 
-    private val deviceSeedButton = add(
-        ActButtonWidget.builder(deviceSeedLabel()) { toggleDeviceSeed() }
-            .width(100)
-            .tooltip(Tooltip.create(Component.translatable("austrianpainter.device.seed_hint")))
-            .build(),
-    )
-
     private val deviceResetButton = add(
         ActButtonWidget.builder(Component.translatable("austrianpainter.device.reset")) { resetDeviceRules() }
             .width(110).build(),
     )
 
-    private val deviceList = add(
+    private val p2List = add(
         RowListWidget<DeviceRule>(0, 0, 0, 0, ROW_HEIGHT).apply {
             rows = DungeonRulesLogic.deviceRules
             isSelected = { (selection as? Selection.Device)?.rule == it }
@@ -125,9 +155,9 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         },
     )
 
-    // ------------------------------------------------------------------ widgets - boss-zone panel
+    // ------------------------------------------------------------------ widgets - P3 devices
 
-    private val zoneHeaderLine = add(TextLineWidget(0, 0, 0, GREY))
+    private val p3HeaderLine = add(TextLineWidget(0, 0, 0, GREY))
 
     private val zoneEnableButton = add(
         ActButtonWidget.builder(zoneEnableLabel()) { toggleZonesEnabled() }
@@ -141,12 +171,12 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             .width(110).build(),
     )
 
-    private val zoneList = add(
+    private val p3List = add(
         RowListWidget<ZoneSourceRule>(0, 0, 0, 0, ROW_HEIGHT).apply {
-            rows = BossZones.RULES
+            rows = BossZones.RULES.filter { it.zone != BossZone.PILLARS }
             isSelected = { (selection as? Selection.Zone)?.rule == it }
             onRowClick = { rule -> selection = Selection.Zone(rule); refreshEditor() }
-            drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y) }
+            drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y, showZoneTag = true) }
         },
     )
 
@@ -178,40 +208,19 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     override fun layout(area: ScreenRectangle) {
         val x = area.left() + MARGIN
         val contentWidth = area.width() - MARGIN * 2
-        val leftWidth = (contentWidth - GAP * 2) / 2
-        val rightWidth = contentWidth - leftWidth - GAP * 2
-        val rightX = x + leftWidth + GAP * 2
+        val columnWidth = (contentWidth - GAP * 2) / 3
+        val p1X = x
+        val p2X = x + columnWidth + GAP
+        val p3X = x + (columnWidth + GAP) * 2
 
-        var y = area.top() + GAP
-        deviceHeaderLine.setRectangle(leftWidth, TextLineWidget.HEIGHT, x, y)
-        zoneHeaderLine.setRectangle(rightWidth, TextLineWidget.HEIGHT, rightX, y)
-        y += TextLineWidget.HEIGHT + GAP
-
-        deviceEnableButton.setRectangle(deviceEnableButton.width, BUTTON_HEIGHT, x, y)
-        deviceSeedButton.setRectangle(
-            deviceSeedButton.width,
-            BUTTON_HEIGHT,
-            x + deviceEnableButton.width + GAP,
-            y,
-        )
-        zoneEnableButton.setRectangle(zoneEnableButton.width, BUTTON_HEIGHT, rightX, y)
-        y += BUTTON_HEIGHT + GAP
-
-        deviceResetButton.setRectangle(deviceResetButton.width, BUTTON_HEIGHT, x, y)
-        zoneResetButton.setRectangle(zoneResetButton.width, BUTTON_HEIGHT, rightX, y)
-        y += BUTTON_HEIGHT + GAP * 2
-
+        val top = area.top() + GAP
         val editorRowY = area.bottom() - BUTTON_HEIGHT - GAP
         val editingLineY = editorRowY - TextLineWidget.HEIGHT - GAP
+        val listBottom = editingLineY - GAP
 
-        val listHeight = (editingLineY - y - GAP).coerceAtLeast(ROW_HEIGHT)
-        // Each list sits in a titled card, as the shell draws them; the list itself is inset inside.
-        deviceCard.setRectangle(leftWidth, listHeight, x, y)
-        zoneCard.setRectangle(rightWidth, listHeight, rightX, y)
-        val listTop = y + CardWidget.HEADER_HEIGHT
-        val innerHeight = (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT)
-        deviceList.setRectangle(leftWidth - CardWidget.PAD * 2, innerHeight, x + CardWidget.PAD, listTop)
-        zoneList.setRectangle(rightWidth - CardWidget.PAD * 2, innerHeight, rightX + CardWidget.PAD, listTop)
+        layoutColumn(p1X, columnWidth, top, listBottom, p1HeaderLine, conveyorEnableButton, conveyorResetButton, p1Card, p1List)
+        layoutColumn(p2X, columnWidth, top, listBottom, p2HeaderLine, deviceEnableButton, deviceResetButton, p2Card, p2List)
+        layoutColumn(p3X, columnWidth, top, listBottom, p3HeaderLine, zoneEnableButton, zoneResetButton, p3Card, p3List)
 
         editingLine.setRectangle(contentWidth, TextLineWidget.HEIGHT, x, editingLineY)
         donorButton.setRectangle(donorButton.width, BUTTON_HEIGHT, x, editorRowY)
@@ -229,20 +238,58 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         )
     }
 
+    /** One phase's column: header line, Live + Reset, then its card and list fill the rest. All
+     *  three phases share this exact shape now that P2's old seed button is gone. */
+    private fun layoutColumn(
+        x: Int,
+        width: Int,
+        top: Int,
+        listBottom: Int,
+        headerLine: TextLineWidget,
+        enableButton: ActButtonWidget,
+        resetButton: ActButtonWidget,
+        card: CardWidget,
+        list: RowListWidget<*>,
+    ) {
+        var y = top
+        headerLine.setRectangle(width, TextLineWidget.HEIGHT, x, y)
+        y += TextLineWidget.HEIGHT + GAP
+
+        enableButton.setRectangle(enableButton.width, BUTTON_HEIGHT, x, y)
+        y += BUTTON_HEIGHT + GAP
+
+        resetButton.setRectangle(resetButton.width, BUTTON_HEIGHT, x, y)
+        y += BUTTON_HEIGHT + GAP * 2
+
+        val listHeight = (listBottom - y).coerceAtLeast(ROW_HEIGHT)
+        // Each list sits in a titled card, as the shell draws them; the list itself is inset inside.
+        card.setRectangle(width, listHeight, x, y)
+        val listTop = y + CardWidget.HEADER_HEIGHT
+        val innerHeight = (listHeight - CardWidget.HEADER_HEIGHT - CardWidget.PAD).coerceAtLeast(ROW_HEIGHT)
+        list.setRectangle(width - CardWidget.PAD * 2, innerHeight, x + CardWidget.PAD, listTop)
+    }
+
     // ------------------------------------------------------------------ mutation
+
+    private fun toggleConveyorEnabled() {
+        ApSettings.conveyorEnabled = !ApSettings.conveyorEnabled
+        ApSettings.save()
+        conveyorEnableButton.message = conveyorEnableLabel()
+        p1HeaderLine.message = conveyorHeaderText()
+        dirty = true
+    }
+
+    private fun resetConveyorRules() {
+        ApSettings.resetConveyorRules()
+        dirty = true
+        refreshEditor()
+    }
 
     private fun toggleDeviceEnabled() {
         ApSettings.deviceEnabled = !ApSettings.deviceEnabled
         ApSettings.save()
         deviceEnableButton.message = deviceEnableLabel()
-        deviceHeaderLine.message = deviceHeaderText()
-        dirty = true
-    }
-
-    private fun toggleDeviceSeed() {
-        ApSettings.deviceSeedPerColumn = !ApSettings.deviceSeedPerColumn
-        ApSettings.save()
-        deviceSeedButton.message = deviceSeedLabel()
+        p2HeaderLine.message = deviceHeaderText()
         dirty = true
     }
 
@@ -256,7 +303,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         ApSettings.zonesEnabled = !ApSettings.zonesEnabled
         ApSettings.save()
         zoneEnableButton.message = zoneEnableLabel()
-        zoneHeaderLine.message = zoneHeaderText()
+        p3HeaderLine.message = zoneHeaderText()
         dirty = true
     }
 
@@ -331,8 +378,9 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     // ------------------------------------------------------------------ state
 
     override fun refresh() {
-        deviceHeaderLine.message = deviceHeaderText()
-        zoneHeaderLine.message = zoneHeaderText()
+        p1HeaderLine.message = conveyorHeaderText()
+        p2HeaderLine.message = deviceHeaderText()
+        p3HeaderLine.message = zoneHeaderText()
         refreshEditor()
     }
 
@@ -367,20 +415,25 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     // ------------------------------------------------------------------ labels
 
+    private fun conveyorEnableLabel(): Component = Component.translatable(
+        if (ApSettings.conveyorEnabled) "austrianpainter.conveyor.on" else "austrianpainter.conveyor.off",
+    )
+
     private fun deviceEnableLabel(): Component = Component.translatable(
         if (ApSettings.deviceEnabled) "austrianpainter.device.on" else "austrianpainter.device.off",
     )
 
-    private fun deviceSeedLabel(): Component = Component.translatable(
-        if (ApSettings.deviceSeedPerColumn) {
-            "austrianpainter.device.seed_column"
-        } else {
-            "austrianpainter.device.seed_block"
-        },
-    )
-
     private fun zoneEnableLabel(): Component = Component.translatable(
         if (ApSettings.zonesEnabled) "austrianpainter.zones.on" else "austrianpainter.zones.off",
+    )
+
+    private fun conveyorHeaderText(): Component = Component.translatable(
+        "austrianpainter.dungeon.device_header",
+        if (ApSettings.conveyorEnabled && BossZones.shouldApply()) {
+            Component.translatable("austrianpainter.zones.active")
+        } else {
+            Component.translatable("austrianpainter.zones.inactive")
+        },
     )
 
     private fun deviceHeaderText(): Component = Component.translatable(
@@ -393,8 +446,8 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     )
 
     private fun zoneHeaderText(): Component = Component.translatable(
-        "austrianpainter.dungeon.zone_header",
-        if (BossZones.shouldApply()) {
+        "austrianpainter.dungeon.device_header",
+        if (ApSettings.zonesEnabled && BossZones.shouldApply()) {
             Component.translatable("austrianpainter.zones.active")
         } else {
             Component.translatable("austrianpainter.zones.inactive")
@@ -476,18 +529,25 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             labelX,
             y,
             ROW_HEIGHT,
-            x + deviceList.width,
+            x + p2List.width,
             text = target?.displayName() ?: Component.translatable("austrianpainter.device.left_alone"),
             trailing = arrayName(rule),
             colour = if (target == null) Theme.MUTED else Theme.INK,
         )
     }
 
+    /**
+     * Shared by P1 and P3 - both are plain [ZoneSourceRule] lists, only which zones they hold
+     * differs. [showZoneTag] drops the trailing zone-name readout for P1: every one of its rows is
+     * already the same zone (Conveyer), so repeating it on every row would just be noise the card's
+     * own header already says once.
+     */
     private fun drawZoneRow(
         graphics: GuiGraphicsExtractor,
         rule: ZoneSourceRule,
         x: Int,
         y: Int,
+        showZoneTag: Boolean,
     ) {
         RowContent.accent(graphics, x, y, ROW_HEIGHT, zoneAccent(rule.zone))
 
@@ -498,14 +558,15 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             (target as? AreaTarget.Donor)?.block,
         )
 
+        val list = if (rule.zone == BossZone.PILLARS) p1List else p3List
         RowContent.label(
             graphics,
             labelX,
             y,
             ROW_HEIGHT,
-            x + zoneList.width,
+            x + list.width,
             text = target?.displayName() ?: Component.translatable("austrianpainter.device.left_alone"),
-            trailing = zoneName(rule),
+            trailing = if (showZoneTag) zoneName(rule) else null,
             colour = if (target == null) Theme.MUTED else Theme.INK,
         )
     }

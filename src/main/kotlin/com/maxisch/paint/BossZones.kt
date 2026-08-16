@@ -71,8 +71,11 @@ object BossZones {
         ZoneSourceRule(BossZone.S4, Blocks.BLUE_TERRACOTTA, default = AreaTarget.Donor(Blocks.EMERALD_BLOCK)),
     )
 
+    /** True while either boss phase - P1 (conveyer) or P3 (devices) - is live. */
     fun shouldApply(): Boolean =
-        ApSettings.zonesEnabled && DungeonLocation.floorNumber == 7 && DungeonLocation.inBoss
+        (ApSettings.conveyorEnabled || ApSettings.zonesEnabled) &&
+            DungeonLocation.floorNumber == 7 &&
+            DungeonLocation.inBoss
 
     internal fun activeZones(): ZoneRules = if (!shouldApply()) ZoneRules.EMPTY else cached()
 
@@ -118,6 +121,11 @@ object BossZones {
         val byZone = LinkedHashMap<BossZone, MutableMap<ZoneKey, ColumnTarget>>()
 
         for (rule in RULES) {
+            // P1 (conveyer, BossZone.PILLARS) and P3 (devices, everything else) are independent
+            // boss phases with their own Live toggle - a rule from the off phase is skipped exactly
+            // as if it had no target set.
+            val phaseEnabled = if (rule.zone == BossZone.PILLARS) ApSettings.conveyorEnabled else ApSettings.zonesEnabled
+            if (!phaseEnabled) continue
             val target = columnTarget(rule) ?: continue
             byZone.getOrPut(rule.zone) { LinkedHashMap() }[ZoneKey(rule.block, rule.lit)] = target
             sources.add(rule.block)

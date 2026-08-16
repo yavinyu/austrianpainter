@@ -70,6 +70,8 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
                     quad.cullFace(null)
                 }
             }
+            // finder and paint are non-null whenever palette is - see donorPalette above - Kotlin
+            // just can't see it through the separate locals.
             if (palette != null) retexture(quad, palette, finder!!, paint!!.defaultBlockState(), level, pos)
             true
         }
