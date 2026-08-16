@@ -209,7 +209,10 @@ object DeviceColumns {
                     )
                     ColumnTarget.Donor(array.defaultDonor)
                 } else {
-                    ColumnTarget.Rolled(picker, ApSettings.deviceSeedPerColumn)
+                    // Always one roll per column, so a whole pillar reads as one colour and keeps
+                    // it as the pillar moves - the per-block alternative (speckled, no per-pillar
+                    // identity) is no longer offered as a setting.
+                    ColumnTarget.Rolled(picker, perColumn = true)
                 }
             }
         }

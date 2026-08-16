@@ -72,6 +72,8 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     private val pad = add(CoordinatePadWidget { if (PaintArea.complete) PaintArea.volume() else null })
 
     private val fillCard = add(CardWidget(Component.translatable("austrianpainter.card.fill_from")))
+    private val actionsCard = add(CardWidget(Component.translatable("austrianpainter.card.actions")))
+    private val dangerCard = add(CardWidget(Component.translatable("austrianpainter.card.danger")))
 
     private val listCard = add(
         CardWidget(Component.translatable("austrianpainter.card.scan")) {
@@ -88,9 +90,6 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
     private val fields1 = buildFields(first = true)
     private val fields2 = buildFields(first = false)
-
-    private val useLookedAt1 = add(useLookedAtButton(first = true))
-    private val useLookedAt2 = add(useLookedAtButton(first = false))
 
     private val sizeLine = add(TextLineWidget(0, 0, 0, GREY))
     private val mappingLine = add(TextLineWidget(0, 0, 0, YELLOW))
@@ -125,14 +124,14 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         ActButtonWidget.builder(Component.translatable("austrianpainter.area.replace")) {
             logic.replace()
             rescan()
-        }.width(100).build(),
+        }.width(100).variant(ActButtonWidget.Variant.PRIMARY).build(),
     )
 
     private val replaceRandomButton = add(
         ActButtonWidget.builder(Component.translatable("austrianpainter.area.replace_random")) {
             logic.replaceRandom()
             rescan()
-        }.width(120).build(),
+        }.width(120).variant(ActButtonWidget.Variant.PRIMARY).build(),
     )
 
     private val rerollButton = add(
@@ -167,18 +166,18 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_mapping")) {
             logic.clearRules()
             refreshButtons()
-        }.width(95).build(),
+        }.width(95).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val unpaintSelectedButton = add(
         ActButtonWidget.builder(Component.translatable("austrianpainter.area.unpaint_selected")) {
             logic.clearSelectedPaint()
-        }.width(120).build(),
+        }.width(120).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val clearPaintedButton = add(
         ActButtonWidget.builder(Component.translatable("austrianpainter.area.clear_painted")) { logic.clearPainted() }
-            .width(105).build(),
+            .width(105).variant(ActButtonWidget.Variant.DANGER).build(),
     )
 
     private val clearSelectionButton = add(
@@ -340,15 +339,6 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         return boxes
     }
 
-    private fun useLookedAtButton(first: Boolean): ActButtonWidget =
-        ActButtonWidget.builder(Component.translatable("austrianpainter.area.use_looked_at")) {
-            screen.lookedAtPos?.let {
-                PaintArea.setCorner(first, it)
-                syncFields()
-                requestRescan()
-            }
-        }.width(120).build()
-
     private fun axisKey(axis: Int): String = when (axis) {
         0 -> "austrianpainter.area.axis_x"
         1 -> "austrianpainter.area.axis_y"
@@ -360,6 +350,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         val values = fields.map { it.value.trim().toIntOrNull() }
         if (values.any { it == null }) return
 
+        // None of the three is null past the check above - Kotlin just can't see it through the list.
         PaintArea.setCorner(first, BlockPos(values[0]!!, values[1]!!, values[2]!!))
         requestRescan()
     }
@@ -394,28 +385,53 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
 
         // -------------------------------------------------- selection pad
         var y = top
-        y = placeCornerRow(x + PAD_INNER, y + PAD_INNER, cornerOneLabel, fields1, useLookedAt1)
-        y = placeCornerRow(x + PAD_INNER, y, cornerTwoLabel, fields2, useLookedAt2)
+        y = placeCornerRow(x + PAD_INNER, y + PAD_INNER, cornerOneLabel, fields1)
+        y = placeCornerRow(x + PAD_INNER, y, cornerTwoLabel, fields2)
         y += CoordinatePadWidget.VOLUME_HEIGHT
         pad.setRectangle(leftWidth, y - top, x, top)
+
+        // -------------------------------------------------- select room - a third way to define the
+        // box, same zone as the corner fields above rather than an "action" on the box's contents.
+        y += GAP
+        selectRoomButton.setRectangle(leftWidth, BUTTON_HEIGHT, x, y)
+        y += BUTTON_HEIGHT
 
         // -------------------------------------------------- fill-from card
         val fillTop = y + GAP
         y = fillTop + CardWidget.HEADER_HEIGHT
-        y = flowButtons(x + CardWidget.PAD, y, leftWidth - CardWidget.PAD * 2, donorButton, paletteButton, shapeButton)
+        y = gridButtons(x + CardWidget.PAD, y, leftWidth - CardWidget.PAD * 2, 1, donorButton, paletteButton, shapeButton)
         y += CardWidget.PAD - GAP
         fillCard.setRectangle(leftWidth, y - fillTop, x, fillTop)
 
-        // -------------------------------------------------- actions, wrapped to the column
+        // -------------------------------------------------- actions card - commit pair first (the
+        // two verbs used on every pass through this tab), then the rest as a 2-column grid.
+        val actionsTop = y + GAP
+        y = actionsTop + CardWidget.HEADER_HEIGHT
+        val actionsInner = leftWidth - CardWidget.PAD * 2
+        y = gridButtons(x + CardWidget.PAD, y, actionsInner, 2, replaceButton, replaceRandomButton)
         y += GAP
-        y = flowButtons(
-            x, y, leftWidth,
-            replaceButton, replaceRandomButton, rerollButton, reapplyButton,
-            saveRulesetButton, loadRulesetButton, clearMappingButton, unpaintSelectedButton,
-            clearPaintedButton, previewButton, clearPreviewButton, selectRoomButton,
-            selectAllButton, clearSelectionButton,
+        y = gridButtons(
+            x + CardWidget.PAD, y, actionsInner, 2,
+            rerollButton, selectAllButton,
+            previewButton, clearPreviewButton,
+            clearSelectionButton, reapplyButton,
+            saveRulesetButton, loadRulesetButton,
         )
+        y += CardWidget.PAD - GAP
+        actionsCard.setRectangle(leftWidth, y - actionsTop, x, actionsTop)
 
+        // -------------------------------------------------- danger zone card - the three actions
+        // that discard work, stacked full-width so they read as a warning list, not a compact grid.
+        val dangerTop = y + GAP
+        y = dangerTop + CardWidget.HEADER_HEIGHT
+        y = gridButtons(
+            x + CardWidget.PAD, y, leftWidth - CardWidget.PAD * 2, 1,
+            clearMappingButton, unpaintSelectedButton, clearPaintedButton,
+        )
+        y += CardWidget.PAD - GAP
+        dangerCard.setRectangle(leftWidth, y - dangerTop, x, dangerTop)
+
+        y += GAP
         for (line in listOf(sizeLine, mappingLine)) {
             line.setRectangle(leftWidth, TextLineWidget.HEIGHT, x, y)
             y += TextLineWidget.HEIGHT
@@ -438,23 +454,23 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
     }
 
     /**
-     * Lays buttons left to right, wrapping to a new line when the next one would overrun [width].
-     *
-     * This tab has fourteen actions and the column is too narrow for the fixed three-per-row grid it
-     * used to assume; wrapping keeps them packed whatever the screen width turns out to be.
+     * Lays buttons into a fixed grid, [columns] wide, every button sharing one equal column width so
+     * rows visibly line up instead of packing ragged at each button's own label width.
      */
-    private fun flowButtons(startX: Int, startY: Int, width: Int, vararg buttons: ActButtonWidget): Int {
-        var cursorX = startX
-        var cursorY = startY
-        buttons.forEach { button ->
-            if (cursorX > startX && cursorX + button.width > startX + width) {
-                cursorX = startX
-                cursorY += BUTTON_HEIGHT + GAP
-            }
-            button.setRectangle(button.width, BUTTON_HEIGHT, cursorX, cursorY)
-            cursorX += button.width + GAP
+    private fun gridButtons(startX: Int, startY: Int, width: Int, columns: Int, vararg buttons: ActButtonWidget): Int {
+        val columnWidth = (width - (columns - 1) * GAP) / columns
+        buttons.forEachIndexed { index, button ->
+            val column = index % columns
+            val row = index / columns
+            button.setRectangle(
+                columnWidth,
+                BUTTON_HEIGHT,
+                startX + column * (columnWidth + GAP),
+                startY + row * (BUTTON_HEIGHT + GAP),
+            )
         }
-        return cursorY + BUTTON_HEIGHT + GAP
+        val rows = (buttons.size + columns - 1) / columns
+        return startY + rows * (BUTTON_HEIGHT + GAP)
     }
 
     private fun placeCornerRow(
@@ -462,7 +478,6 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         y: Int,
         label: TextLineWidget,
         fields: Array<ApEditBox>,
-        button: ActButtonWidget,
     ): Int {
         label.setRectangle(LABEL_WIDTH, TextLineWidget.HEIGHT, startX, y + 5)
         var x = startX + LABEL_WIDTH
@@ -470,7 +485,6 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             field.setRectangle(FIELD_WIDTH, 18, x, y)
             x += FIELD_WIDTH + GAP
         }
-        button.setRectangle(button.width, BUTTON_HEIGHT, x + 2, y - 1)
         return y + 22
     }
 
