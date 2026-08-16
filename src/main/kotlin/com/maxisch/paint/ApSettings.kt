@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.maxisch.paint.ApLog.LOGGER
 import net.minecraft.core.registries.BuiltInRegistries
+import java.nio.file.Path
 import kotlin.io.path.notExists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -104,28 +105,40 @@ object ApSettings {
     var deviceEnabled: Boolean = false
 
     /**
-     * Keyed `"<array>.<source>"`. A key that is present with a null value is a rule the player
-     * turned off, which is not the same as one that was never written - an absent key falls back
-     * to the array's own colour so a settings file from before the feature existed picks it up.
+     * Which boss preset ("config") the P1/P2/P3 rules below currently read and write - the same
+     * name [PresetStores.bosses] has loaded. Rules travel with the active boss preset: walking into
+     * a boss floor bound to a different preset, or activating one by hand in the Presets tab, swaps
+     * which slice of [deviceRulesByConfig]/[zoneRulesByConfig] every rule function below sees.
      */
-    private val deviceRules = LinkedHashMap<String, AreaTarget?>()
+    private val activeConfig: String get() = PresetStores.bosses.activeName
+
+    /**
+     * Outer key is the boss preset name (see [activeConfig]); inner keyed `"<array>.<source>"`. A
+     * key present with a null value is a rule the player turned off, which is not the same as one
+     * that was never written - an absent key falls back to the array's own colour so a settings
+     * file from before the feature existed (or before a given config had any rules of its own)
+     * picks it up.
+     */
+    private val deviceRulesByConfig = LinkedHashMap<String, LinkedHashMap<String, AreaTarget?>>()
 
     private fun deviceKey(array: DeviceArray, source: DeviceSource) = "${array.key}.${source.key}"
 
     fun deviceRule(array: DeviceArray, source: DeviceSource): AreaTarget? {
         val key = deviceKey(array, source)
-        if (deviceRules.containsKey(key)) return deviceRules[key]
+        val bucket = deviceRulesByConfig[activeConfig]
+        if (bucket?.containsKey(key) == true) return bucket[key]
         return AreaTarget.Donor(array.defaultDonor)
     }
 
     fun setDeviceRule(array: DeviceArray, source: DeviceSource, target: AreaTarget?) {
-        deviceRules[deviceKey(array, source)] = target
+        deviceRulesByConfig.getOrPut(activeConfig) { LinkedHashMap() }[deviceKey(array, source)] = target
         save()
     }
 
-    /** Back to each array's own glass, by forgetting every rule rather than by writing defaults. */
+    /** Back to each array's own glass, by forgetting every rule of the active config rather than by
+     *  writing defaults. Other configs' rules are untouched. */
     fun resetDeviceRules() {
-        deviceRules.clear()
+        deviceRulesByConfig[activeConfig]?.clear()
         save()
     }
 
@@ -138,10 +151,11 @@ object ApSettings {
     /** P1 - the conveyer zone ([BossZone.PILLARS]). */
     var conveyorEnabled: Boolean = false
 
-    /** Keyed "<zone>.<blockId>[.lit|.unlit]", same present-with-null-means-off contract as
-     *  [deviceRules]. Shared by P1 and P3 - the two are the same underlying rule map, only their
-     *  enabled flag and their reset scope (see below) are independent. */
-    private val zoneRules = LinkedHashMap<String, AreaTarget?>()
+    /** Keyed "<zone>.<blockId>[.lit|.unlit]", same present-with-null-means-off contract and same
+     *  per-[activeConfig] outer key as [deviceRulesByConfig]. Shared by P1 and P3 - the two are the
+     *  same underlying rule map, only their enabled flag and their reset scope (see below) are
+     *  independent. */
+    private val zoneRulesByConfig = LinkedHashMap<String, LinkedHashMap<String, AreaTarget?>>()
 
     private fun zoneRuleKey(rule: ZoneSourceRule): String {
         val blockId = BuiltInRegistries.BLOCK.getKey(rule.block)
@@ -155,26 +169,27 @@ object ApSettings {
 
     fun zoneRule(rule: ZoneSourceRule): AreaTarget? {
         val key = zoneRuleKey(rule)
-        if (zoneRules.containsKey(key)) return zoneRules[key]
+        val bucket = zoneRulesByConfig[activeConfig]
+        if (bucket?.containsKey(key) == true) return bucket[key]
         return rule.default
     }
 
     fun setZoneRule(rule: ZoneSourceRule, target: AreaTarget?) {
-        zoneRules[zoneRuleKey(rule)] = target
+        zoneRulesByConfig.getOrPut(activeConfig) { LinkedHashMap() }[zoneRuleKey(rule)] = target
         save()
     }
 
     private val conveyorKeyPrefix get() = "${BossZone.PILLARS.key}."
 
-    /** P1 only. */
+    /** P1 only, active config only. */
     fun resetConveyorRules() {
-        zoneRules.keys.removeAll { it.startsWith(conveyorKeyPrefix) }
+        zoneRulesByConfig[activeConfig]?.keys?.removeAll { it.startsWith(conveyorKeyPrefix) }
         save()
     }
 
-    /** P3 only - every zone rule that is not [BossZone.PILLARS]. */
+    /** P3 only, active config only - every zone rule that is not [BossZone.PILLARS]. */
     fun resetZoneRules() {
-        zoneRules.keys.removeAll { !it.startsWith(conveyorKeyPrefix) }
+        zoneRulesByConfig[activeConfig]?.keys?.removeAll { !it.startsWith(conveyorKeyPrefix) }
         save()
     }
 
@@ -259,6 +274,13 @@ object ApSettings {
                     if (bossPresets[room] == from) bossPresets[room] = to
                 }
                 if (defaultBossPreset == from) defaultBossPreset = to
+
+                // The P1/P2/P3 rules bound to this boss preset's name move with it, same as the
+                // preset's own file does (PresetStore.rename renames the file, not what is in it).
+                deviceRulesByConfig.remove(from)?.let { deviceRulesByConfig[to] = it }
+                zoneRulesByConfig.remove(from)?.let { zoneRulesByConfig[to] = it }
+                DeviceColumns.invalidate()
+                BossZones.invalidate()
             }
 
             PresetKind.TYPES -> {
@@ -278,21 +300,25 @@ object ApSettings {
                 // fails silently - it just falls back to a colour. (Ruleset preset files have the
                 // same problem and are not rewritten here; they live on disk, not in settings.)
                 var renamed = false
-                for (key in deviceRules.keys.toList()) {
-                    val target = deviceRules[key]
-                    if (target is AreaTarget.Palette && target.name == from) {
-                        deviceRules[key] = AreaTarget.Palette(to)
-                        renamed = true
+                for (bucket in deviceRulesByConfig.values) {
+                    for (key in bucket.keys.toList()) {
+                        val target = bucket[key]
+                        if (target is AreaTarget.Palette && target.name == from) {
+                            bucket[key] = AreaTarget.Palette(to)
+                            renamed = true
+                        }
                     }
                 }
                 if (renamed) DeviceColumns.invalidate()
 
                 var zoneRenamed = false
-                for (key in zoneRules.keys.toList()) {
-                    val target = zoneRules[key]
-                    if (target is AreaTarget.Palette && target.name == from) {
-                        zoneRules[key] = AreaTarget.Palette(to)
-                        zoneRenamed = true
+                for (bucket in zoneRulesByConfig.values) {
+                    for (key in bucket.keys.toList()) {
+                        val target = bucket[key]
+                        if (target is AreaTarget.Palette && target.name == from) {
+                            bucket[key] = AreaTarget.Palette(to)
+                            zoneRenamed = true
+                        }
                     }
                 }
                 if (zoneRenamed) BossZones.invalidate()
@@ -306,6 +332,18 @@ object ApSettings {
     }
 
     // ---------------------------------------------------------------- io
+
+    /** One config's slice of a device/zone rule map, read from its "<key>": "<raw>" JSON object. */
+    private fun parseRuleBucket(json: JsonObject, settingsPath: Path): LinkedHashMap<String, AreaTarget?> {
+        val bucket = LinkedHashMap<String, AreaTarget?>()
+        json.entrySet().forEach { (key, value) ->
+            val raw = value.asString
+            bucket[key] =
+                if (raw == DEVICE_RULE_OFF) null
+                else PresetCodec.target(raw, settingsPath) ?: return@forEach
+        }
+        return bucket
+    }
 
     fun load() {
         ApPaths.ensureDirectories()
@@ -367,29 +405,41 @@ object ApSettings {
                 roomPalettePresets[room] = preset.asString
             }
 
-            deviceRules.clear()
+            deviceRulesByConfig.clear()
             root.getAsJsonObject("deviceColumns")?.let { device ->
                 deviceEnabled = device.get("enabled")?.asBoolean ?: false
-                device.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
-                    val raw = value.asString
-                    deviceRules[key] =
-                        if (raw == DEVICE_RULE_OFF) null
-                        else PresetCodec.target(raw, path) ?: return@forEach
+                val byConfig = device.getAsJsonObject("rulesByConfig")
+                if (byConfig != null) {
+                    byConfig.entrySet().forEach { (config, rules) ->
+                        deviceRulesByConfig[config] = parseRuleBucket(rules.asJsonObject, path)
+                    }
+                } else {
+                    // Migration: a settings file from before rules were split per boss preset had
+                    // one flat "rules" object - treat it as the "default" preset's rules rather
+                    // than losing it.
+                    device.getAsJsonObject("rules")?.let {
+                        deviceRulesByConfig[DEFAULT_PRESET] = parseRuleBucket(it, path)
+                    }
                 }
             }
 
-            zoneRules.clear()
+            zoneRulesByConfig.clear()
             root.getAsJsonObject("bossZones")?.let { zones ->
                 zonesEnabled = zones.get("enabled")?.asBoolean ?: false
                 // conveyorEnabled is new; a settings file from before P1 and P3 split falls back to
                 // whatever the old shared "enabled" was, so an existing save does not silently lose
                 // its conveyer rules on update.
                 conveyorEnabled = zones.get("conveyorEnabled")?.asBoolean ?: zonesEnabled
-                zones.getAsJsonObject("rules")?.entrySet()?.forEach { (key, value) ->
-                    val raw = value.asString
-                    zoneRules[key] =
-                        if (raw == DEVICE_RULE_OFF) null
-                        else PresetCodec.target(raw, path) ?: return@forEach
+                val byConfig = zones.getAsJsonObject("rulesByConfig")
+                if (byConfig != null) {
+                    byConfig.entrySet().forEach { (config, rules) ->
+                        zoneRulesByConfig[config] = parseRuleBucket(rules.asJsonObject, path)
+                    }
+                } else {
+                    // Same migration as deviceColumns above.
+                    zones.getAsJsonObject("rules")?.let {
+                        zoneRulesByConfig[DEFAULT_PRESET] = parseRuleBucket(it, path)
+                    }
                 }
             }
 
@@ -452,19 +502,27 @@ object ApSettings {
                 "deviceColumns",
                 JsonObject().apply {
                     addProperty("enabled", deviceEnabled)
-                    val rules = JsonObject()
-                    // Every rule is written, including the ones still on their default, so the file
-                    // shows what the feature will actually do rather than only what was changed.
-                    for (array in DeviceArray.entries) {
-                        for (source in DeviceSource.entries) {
-                            val target = deviceRule(array, source)
-                            rules.addProperty(
-                                deviceKey(array, source),
-                                if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
-                            )
+                    val byConfig = JsonObject()
+                    // Every config that has ever been visited gets its full rule set written,
+                    // including the entries still on their default, so the file shows what each one
+                    // will actually do rather than only what was changed - same reasoning as before
+                    // these were split per config, just once per config now instead of once overall.
+                    for (config in deviceRulesByConfig.keys.ifEmpty { setOf(activeConfig) }) {
+                        val bucket = deviceRulesByConfig[config]
+                        val rules = JsonObject()
+                        for (array in DeviceArray.entries) {
+                            for (source in DeviceSource.entries) {
+                                val key = deviceKey(array, source)
+                                val target = if (bucket?.containsKey(key) == true) bucket[key] else AreaTarget.Donor(array.defaultDonor)
+                                rules.addProperty(
+                                    key,
+                                    if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
+                                )
+                            }
                         }
+                        byConfig.add(config, rules)
                     }
-                    add("rules", rules)
+                    add("rulesByConfig", byConfig)
                 },
             )
 
@@ -473,15 +531,21 @@ object ApSettings {
                 JsonObject().apply {
                     addProperty("enabled", zonesEnabled)
                     addProperty("conveyorEnabled", conveyorEnabled)
-                    val rules = JsonObject()
-                    for (rule in BossZones.RULES) {
-                        val target = zoneRule(rule)
-                        rules.addProperty(
-                            zoneRuleKey(rule),
-                            if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
-                        )
+                    val byConfig = JsonObject()
+                    for (config in zoneRulesByConfig.keys.ifEmpty { setOf(activeConfig) }) {
+                        val bucket = zoneRulesByConfig[config]
+                        val rules = JsonObject()
+                        for (rule in BossZones.RULES) {
+                            val key = zoneRuleKey(rule)
+                            val target = if (bucket?.containsKey(key) == true) bucket[key] else rule.default
+                            rules.addProperty(
+                                key,
+                                if (target == null) DEVICE_RULE_OFF else PresetCodec.targetValue(target),
+                            )
+                        }
+                        byConfig.add(config, rules)
                     }
-                    add("rules", rules)
+                    add("rulesByConfig", byConfig)
                 },
             )
 
