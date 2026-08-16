@@ -1,7 +1,8 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.gui.BlockPickerScreen
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.screen.BlockPickerScreen
+import com.maxisch.client.gui.screen.PainterScreen
+import com.maxisch.client.gui.screen.ReplaceFluidBossScreen
 import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.nvgSurface
 import com.maxisch.client.render.render2d.NVGUtils
@@ -10,16 +11,16 @@ import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
-import com.maxisch.paint.ApSettings
-import com.maxisch.paint.AreaTarget
-import com.maxisch.paint.BossZone
-import com.maxisch.paint.BossZones
-import com.maxisch.paint.DeviceArray
-import com.maxisch.paint.DeviceColumns
+import com.maxisch.paint.settings.ApSettings
+import com.maxisch.paint.rule.AreaTarget
+import com.maxisch.paint.rule.BossZone
+import com.maxisch.paint.rule.BossZones
+import com.maxisch.paint.rule.DeviceArray
+import com.maxisch.paint.rule.DeviceColumns
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PresetStores
-import com.maxisch.paint.ZoneSourceRule
-import com.maxisch.paint.displayName
+import com.maxisch.paint.preset.PresetStores
+import com.maxisch.paint.rule.ZoneSourceRule
+import com.maxisch.paint.rule.displayName
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
@@ -200,6 +201,14 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             .width(110).build(),
     )
 
+    /** Always active - unlike the three buttons above it does not act on [selection], it opens
+     *  the per-boss "Replace Fluid" override screen for whichever preset is currently active. */
+    private val replaceFluidButton = add(
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.replace_fluid")) {
+            Minecraft.getInstance().setScreenAndShow(ReplaceFluidBossScreen(screen))
+        }.width(140).build(),
+    )
+
     init {
         refreshEditor()
     }
@@ -235,6 +244,14 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             clearButton.width,
             BUTTON_HEIGHT,
             x + donorButton.width + paletteButton.width + GAP * 2,
+            editorRowY,
+        )
+        // Right-aligned rather than chained after clearButton: it does not act on a selection,
+        // so it reads as a separate control rather than a fourth step in the same row.
+        replaceFluidButton.setRectangle(
+            replaceFluidButton.width,
+            BUTTON_HEIGHT,
+            x + contentWidth - replaceFluidButton.width,
             editorRowY,
         )
     }

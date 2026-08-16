@@ -1,7 +1,7 @@
 package com.maxisch.paint.session
 
-import com.maxisch.paint.AreaSelector
-import com.maxisch.paint.AreaTarget
+import com.maxisch.paint.rule.AreaSelector
+import com.maxisch.paint.rule.AreaTarget
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.world.phys.AABB

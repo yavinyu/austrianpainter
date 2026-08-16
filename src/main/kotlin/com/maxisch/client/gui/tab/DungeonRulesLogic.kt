@@ -1,9 +1,9 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.paint.AreaTarget
-import com.maxisch.paint.DeviceArray
-import com.maxisch.paint.DeviceSource
-import com.maxisch.paint.PresetStores
+import com.maxisch.paint.rule.AreaTarget
+import com.maxisch.paint.rule.DeviceArray
+import com.maxisch.paint.rule.DeviceSource
+import com.maxisch.paint.preset.PresetStores
 
 /** One device-column rule key: which array, which of its two source blocks. */
 data class DeviceRule(val array: DeviceArray, val source: DeviceSource)

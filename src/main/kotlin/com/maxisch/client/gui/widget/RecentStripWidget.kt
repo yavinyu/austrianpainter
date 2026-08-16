@@ -29,7 +29,9 @@ class RecentStripWidget(
     companion object {
         const val CELL = 20
 
-        private const val ITEM_INSET = 2
+        // 16px item x 1.25 = 20, an exact whole-pixel fit for the 20px cell - keeps the same
+        // sharpness rule the block picker's own upscale uses (see BlockPickerScreen.ITEM_SCALE).
+        private const val ITEM_SCALE = 1.25f
     }
 
     private fun indexAt(mouseX: Double, mouseY: Double): Int? {
@@ -86,7 +88,14 @@ class RecentStripWidget(
         // Items last and always vanilla - NanoVG cannot draw a block model.
         recent.forEachIndexed { index, block ->
             val stack = ItemStack(block)
-            if (!stack.isEmpty) graphics.item(stack, x + index * CELL + ITEM_INSET, y + ITEM_INSET)
+            if (!stack.isEmpty) {
+                val pose = graphics.pose()
+                pose.pushMatrix()
+                pose.translate((x + index * CELL).toFloat(), y.toFloat())
+                pose.scale(ITEM_SCALE, ITEM_SCALE)
+                graphics.item(stack, 0, 0)
+                pose.popMatrix()
+            }
         }
     }
 

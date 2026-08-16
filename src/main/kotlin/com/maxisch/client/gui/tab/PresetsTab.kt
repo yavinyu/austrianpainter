@@ -1,7 +1,7 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.gui.BlockPickerScreen
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.screen.BlockPickerScreen
+import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.nvgSurface
 import com.maxisch.client.render.render2d.Gradient
@@ -11,13 +11,13 @@ import com.maxisch.client.gui.widget.CardWidget
 import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
-import com.maxisch.paint.ApPaths
-import com.maxisch.paint.ApSettings
+import com.maxisch.paint.settings.ApPaths
+import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PalettePreset
-import com.maxisch.paint.PresetKind
-import com.maxisch.paint.PresetStore
-import com.maxisch.paint.PresetStores
+import com.maxisch.paint.preset.PalettePreset
+import com.maxisch.paint.preset.PresetKind
+import com.maxisch.paint.preset.PresetStore
+import com.maxisch.paint.preset.PresetStores
 import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft

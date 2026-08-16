@@ -1,10 +1,11 @@
 package com.maxisch.paint
 
-import com.maxisch.paint.ApLog.LOGGER
+import com.maxisch.paint.settings.ApLog.LOGGER
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet
 import net.minecraft.network.chat.Component
 import net.minecraft.world.level.block.Block
+import com.maxisch.paint.rule.PaintRules
 
 /**
  * Bounded undo over [PaintRules].
