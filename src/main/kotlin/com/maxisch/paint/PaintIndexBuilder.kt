@@ -1,13 +1,18 @@
 package com.maxisch.paint
 
-import com.maxisch.dungeon.DungeonLocation
-import com.maxisch.dungeon.RoomScanner
-import com.maxisch.dungeon.RoomScope
-import com.maxisch.dungeon.RoomTransform
+import com.maxisch.dungeon.detect.DungeonLocation
+import com.maxisch.dungeon.detect.RoomScanner
+import com.maxisch.dungeon.room.RoomScope
+import com.maxisch.dungeon.room.RoomTransform
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
+import com.maxisch.paint.settings.ApSettings
+import com.maxisch.paint.rule.BossZones
+import com.maxisch.paint.rule.DeviceColumns
+import com.maxisch.paint.rule.PaintRules
+import com.maxisch.paint.preset.PresetStores
 
 /**
  * Flattens the active presets into [PaintIndex].

@@ -1,7 +1,7 @@
 package com.maxisch.paint.session
 
-import com.maxisch.paint.AreaSelector
-import com.maxisch.paint.PaintFilter
+import com.maxisch.paint.rule.AreaSelector
+import com.maxisch.paint.rule.PaintFilter
 import com.maxisch.paint.PaintIndex
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.Level
