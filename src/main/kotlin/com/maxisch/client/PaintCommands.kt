@@ -1,19 +1,11 @@
 package com.maxisch.client
 
-import com.maxisch.client.render.CullDiagnostics
-import com.maxisch.dungeon.DeviceColumnData
-import com.maxisch.dungeon.DungeonLocation
-import com.maxisch.dungeon.RoomDataStore
-import com.maxisch.paint.ApSettings
-import com.maxisch.paint.BossZones
-import com.maxisch.paint.DeviceArray
-import com.maxisch.paint.DeviceColumns
-import com.maxisch.paint.DeviceSource
+import com.maxisch.client.render.culling.CullDiagnostics
+import com.maxisch.dungeon.detect.DungeonLocation
+import com.maxisch.dungeon.room.RoomDataStore
+import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.displayName
 import com.maxisch.paint.session.PaintBrush
-import com.maxisch.paint.session.PaintSelection
-import com.mojang.brigadier.arguments.BoolArgumentType
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.context.CommandContext
@@ -28,14 +20,15 @@ import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.Blocks
+import com.maxisch.client.keybind.PaintKeys
 
-/** Client-only `/paintbrush` command. Nothing here reaches the server. */
+/** Client-only `/ap` command. Nothing here reaches the server. */
 object PaintCommands {
 
     fun register() {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
-                ClientCommands.literal("paintbrush")
+                ClientCommands.literal("ap")
                     .executes { context -> status(context.source) }
                     .then(
                         ClientCommands.literal("on").executes { context ->
@@ -93,49 +86,6 @@ object PaintCommands {
                             ),
                     )
                     .then(
-                        ClientCommands.literal("device")
-                            .executes { context -> deviceStatus(context.source) }
-                            .then(
-                                ClientCommands.literal("on").executes { context ->
-                                    setDeviceEnabled(context.source, true)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("off").executes { context ->
-                                    setDeviceEnabled(context.source, false)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("nearest").executes { context ->
-                                    deviceNearest(context.source)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("probe").executes { context ->
-                                    deviceProbe(context.source)
-                                },
-                            ),
-                    )
-                    .then(
-                        ClientCommands.literal("zones")
-                            .executes { context -> zonesStatus(context.source) }
-                            .then(
-                                ClientCommands.literal("on").executes { context ->
-                                    setZonesEnabled(context.source, true)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("off").executes { context ->
-                                    setZonesEnabled(context.source, false)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("toggle").executes { context ->
-                                    setZonesEnabled(context.source, !ApSettings.zonesEnabled)
-                                },
-                            ),
-                    )
-                    .then(
                         ClientCommands.literal("undo").executes { context ->
                             context.source.sendFeedback(PaintStorage.undo())
                             1
@@ -173,59 +123,19 @@ object PaintCommands {
                         ),
                     )
                     .then(
-                        ClientCommands.literal("sound").then(
-                            ClientCommands.argument("enabled", BoolArgumentType.bool())
-                                .executes { context ->
-                                    ApSettings.paintSound = BoolArgumentType.getBool(context, "enabled")
-                                    ApSettings.save()
-                                    feedback(
-                                        context.source,
-                                        if (ApSettings.paintSound) {
-                                            "austrianpainter.sound.on"
-                                        } else {
-                                            "austrianpainter.sound.off"
-                                        },
-                                    )
-                                },
-                        ),
+                        ClientCommands.literal("sound").executes { context ->
+                            setSoundEnabled(context.source, !ApSettings.paintSound)
+                        },
                     )
                     .then(
-                        ClientCommands.literal("keys")
-                            .executes { context -> keysStatus(context.source) }
-                            .then(
-                                ClientCommands.literal("on").executes { context ->
-                                    setKeybindsEnabled(context.source, true)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("off").executes { context ->
-                                    setKeybindsEnabled(context.source, false)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("toggle").executes { context ->
-                                    setKeybindsEnabled(context.source, !ApSettings.keybindsEnabled)
-                                },
-                            ),
+                        ClientCommands.literal("keys").executes { context ->
+                            setKeybindsEnabled(context.source, !ApSettings.keybindsEnabled)
+                        },
                     )
                     .then(
-                        ClientCommands.literal("hud")
-                            .executes { context -> hudStatus(context.source) }
-                            .then(
-                                ClientCommands.literal("on").executes { context ->
-                                    setHudEnabled(context.source, true)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("off").executes { context ->
-                                    setHudEnabled(context.source, false)
-                                },
-                            )
-                            .then(
-                                ClientCommands.literal("toggle").executes { context ->
-                                    setHudEnabled(context.source, !ApSettings.showHud)
-                                },
-                            ),
+                        ClientCommands.literal("hud").executes { context ->
+                            setHudEnabled(context.source, !ApSettings.showHud)
+                        },
                     ),
             )
         }
@@ -299,7 +209,7 @@ object PaintCommands {
                     DungeonLocation.forcedFloor ?: "?",
                 ).withStyle { style ->
                     style.withUnderlined(true)
-                        .withClickEvent(ClickEvent.SuggestCommand("/paintbrush dungeon off"))
+                        .withClickEvent(ClickEvent.SuggestCommand("/ap dungeon off"))
                 },
             )
         }
@@ -339,149 +249,17 @@ object PaintCommands {
         )
     }
 
-    // ---------------------------------------------------------------- device columns
-
-    private fun setDeviceEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
-        ApSettings.deviceEnabled = enabled
+    private fun setSoundEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
+        ApSettings.paintSound = enabled
         ApSettings.save()
-        DeviceColumns.invalidate()
-        PaintStorage.onDeviceScopeChanged()
-        return deviceStatus(source)
-    }
-
-    /**
-     * Without this the layer is invisible until it fails: the pillars only exist on one floor of
-     * one server, so "nothing happened" has half a dozen equally plausible causes.
-     */
-    private fun deviceStatus(source: FabricClientCommandSource): Int {
-        if (!DeviceColumnData.loaded) return feedback(source, "austrianpainter.device.no_data")
-
-        feedback(
-            source,
-            "austrianpainter.device.status",
-            Component.translatable(
-                if (ApSettings.deviceEnabled) "austrianpainter.device.on" else "austrianpainter.device.off",
-            ),
-            DeviceColumnData.columnCount,
-            DeviceColumns.ruleCount(),
-        )
-
-        feedback(
-            source,
-            if (DeviceColumns.shouldApply()) {
-                "austrianpainter.device.active"
-            } else {
-                "austrianpainter.device.inactive"
-            },
-        )
-
-        for (array in DeviceArray.entries) {
-            for (deviceSource in DeviceSource.entries) {
-                val target = ApSettings.deviceRule(array, deviceSource)
-                source.sendFeedback(
-                    if (target == null) {
-                        Component.translatable(
-                            "austrianpainter.device.row_off",
-                            arrayName(array),
-                            deviceSource.block.name,
-                        )
-                    } else {
-                        Component.translatable(
-                            "austrianpainter.device.row",
-                            arrayName(array),
-                            deviceSource.block.name,
-                            target.displayName(),
-                        )
-                    },
-                )
-            }
-        }
-        return 1
-    }
-
-    /** Finds a column to stand at without having to open the bundled coordinate file. */
-    private fun deviceNearest(source: FabricClientCommandSource): Int {
-        val player = source.player
-        val column = DeviceColumns.nearestColumn(player.blockX, player.blockZ)
-            ?: return feedback(source, "austrianpainter.device.no_data")
-
-        source.sendFeedback(
-            Component.translatable(
-                "austrianpainter.device.nearest",
-                column.base.x,
-                column.base.z,
-                arrayName(column.array),
-                column.minY,
-                column.maxY,
-            ).withStyle { style ->
-                style.withUnderlined(true).withClickEvent(
-                    ClickEvent.SuggestCommand("/tp ${column.base.x} ${column.minY} ${column.base.z}"),
-                )
-            },
-        )
-        return 1
-    }
-
-    /**
-     * Answers "is my rule wrong, is my band wrong, or is that block simply not diorite" in one
-     * line, which is otherwise three separate guesses.
-     */
-    private fun deviceProbe(source: FabricClientCommandSource): Int {
-        val pos = PaintSelection.lookedAtPos()
-            ?: return feedback(source, "austrianpainter.brush.miss")
-        val block = PaintSelection.lookedAtBlock()
-            ?: return feedback(source, "austrianpainter.brush.miss")
-
-        val column = DeviceColumns.columnAt(pos.x, pos.z)
-            ?: return feedback(source, "austrianpainter.device.probe_miss")
-
-        val deviceSource = DeviceColumns.sourceFor(block)
-        val donor = if (deviceSource == null || pos.y < column.minY || pos.y > column.maxY) {
-            null
-        } else {
-            DeviceColumns.donorFor(column.array, deviceSource, pos.x, pos.y, pos.z)
-        }
-
         return feedback(
             source,
-            if (donor == null) "austrianpainter.device.probe_plain" else "austrianpainter.device.probe_hit",
-            arrayName(column.array),
-            column.minY,
-            column.maxY,
-            block.name,
-            donor?.name ?: Component.empty(),
-        )
-    }
-
-    private fun arrayName(array: DeviceArray): Component =
-        Component.translatable("austrianpainter.device.array.${array.key}")
-
-    // ---------------------------------------------------------------- boss zones
-
-    private fun setZonesEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
-        ApSettings.zonesEnabled = enabled
-        ApSettings.save()
-        BossZones.invalidate()
-        PaintStorage.onDeviceScopeChanged()
-        return zonesStatus(source)
-    }
-
-    private fun zonesStatus(source: FabricClientCommandSource): Int {
-        feedback(
-            source,
-            "austrianpainter.zones.status",
-            Component.translatable(if (ApSettings.zonesEnabled) "austrianpainter.zones.on" else "austrianpainter.zones.off"),
-            BossZones.ruleCount(),
-        )
-        return feedback(
-            source,
-            if (BossZones.shouldApply()) "austrianpainter.zones.active" else "austrianpainter.zones.inactive",
+            if (ApSettings.paintSound) "austrianpainter.sound.on" else "austrianpainter.sound.off",
         )
     }
 
     private fun setKeybindsEnabled(source: FabricClientCommandSource, enabled: Boolean): Int {
-        ApSettings.keybindsEnabled = enabled
-        ApSettings.save()
+        PaintKeys.setEnabled(enabled)
         return keysStatus(source)
     }
 
