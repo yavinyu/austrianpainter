@@ -3,6 +3,7 @@ package com.maxisch.client.gui
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
+import com.maxisch.client.gui.screen.ApConfirmScreen
 
 /**
  * Gate for destructive one-click buttons (clearing painted blocks) that has no undo path large

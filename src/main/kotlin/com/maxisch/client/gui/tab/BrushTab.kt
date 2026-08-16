@@ -1,9 +1,9 @@
 package com.maxisch.client.gui.tab
 
-import com.maxisch.client.KeyHints
-import com.maxisch.client.gui.BlockPickerScreen
+import com.maxisch.client.keybind.KeyHints
+import com.maxisch.client.gui.screen.BlockPickerScreen
 import com.maxisch.client.gui.ConfirmAction
-import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.CardWidget
@@ -14,10 +14,10 @@ import com.maxisch.client.gui.widget.RecentStripWidget
 import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
-import com.maxisch.client.render.PaintedOverlay
-import com.maxisch.paint.ApSettings
+import com.maxisch.client.render.overlay.PaintedOverlay
+import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.PaintStorage
-import com.maxisch.paint.PresetStores
+import com.maxisch.paint.preset.PresetStores
 import com.maxisch.paint.session.PaintBrush
 import com.maxisch.paint.session.PaintSelection
 import net.minecraft.client.Minecraft
@@ -138,6 +138,7 @@ class BrushTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.b
             onPick = { block ->
                 PaintSelection.target = block
                 PaintBrush.donor = block
+                ApSettings.rememberDonor(BuiltInRegistries.BLOCK.getKey(block).toString())
                 refresh()
             },
         ),

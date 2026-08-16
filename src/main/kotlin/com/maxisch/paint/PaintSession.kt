@@ -1,11 +1,16 @@
 package com.maxisch.paint
 
-import com.maxisch.dungeon.RoomScanner
-import com.maxisch.dungeon.RoomScope
+import com.maxisch.dungeon.detect.RoomScanner
+import com.maxisch.dungeon.room.RoomScope
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
+import com.maxisch.paint.settings.ApPaths
+import com.maxisch.paint.settings.ApSettings
+import com.maxisch.paint.rule.BossZones
+import com.maxisch.paint.rule.DeviceColumns
+import com.maxisch.paint.preset.PresetStores
 
 /**
  * What the rules currently apply to, and when they get written back.

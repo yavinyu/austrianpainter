@@ -7,6 +7,9 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
+import com.maxisch.paint.settings.ApSettings
+import com.maxisch.paint.rule.ColumnRules
+import com.maxisch.paint.rule.ZoneRules
 
 /**
  * Flattened, read-only view of the active presets for the dimension the player is in, built for the

@@ -3,6 +3,7 @@ package com.maxisch.dungeon
 import net.minecraft.core.BlockPos
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.maxisch.dungeon.room.RoomTransform
 
 /**
  * The highest-value test in the repo: a sign error in here silently files every room-scoped paint

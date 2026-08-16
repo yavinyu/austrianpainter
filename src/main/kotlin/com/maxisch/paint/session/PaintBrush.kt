@@ -1,6 +1,6 @@
 package com.maxisch.paint.session
 
-import com.maxisch.paint.ApSettings
+import com.maxisch.paint.settings.ApSettings
 import net.minecraft.core.BlockPos
 import net.minecraft.world.level.block.Block
 

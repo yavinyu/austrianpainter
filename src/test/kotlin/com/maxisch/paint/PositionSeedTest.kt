@@ -4,6 +4,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.maxisch.paint.settings.PositionSeed
 
 /**
  * The seed is what stops a palette-painted pillar from flickering, and a bad mixing constant is

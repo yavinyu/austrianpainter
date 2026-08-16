@@ -1,6 +1,6 @@
 package com.maxisch.mixin.client;
 
-import com.maxisch.client.PaintKeys;
+import com.maxisch.client.keybind.PaintKeys;
 import com.maxisch.paint.session.PaintBrush;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
