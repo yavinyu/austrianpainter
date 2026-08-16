@@ -241,6 +241,7 @@
   "austrianpainter.zones.zone.s2": "S2",
   "austrianpainter.zones.zone.s3": "S3",
   "austrianpainter.zones.zone.s4": "S4",
+  "austrianpainter.zones.zone.crusher": "Crusher",
   "austrianpainter.zones.lit": "%s (lit)",
   "austrianpainter.zones.unlit": "%s (unlit)",
   "austrianpainter.zones.status": "Devices %s - %s rules set",
