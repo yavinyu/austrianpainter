@@ -9,9 +9,14 @@
     "client.GuiGraphicsExtractorAccessor",
     "client.LevelEventHandlerMixin",
     "client.MouseHandlerMixin",
-    "client.TooltipBackgroundMixin",
-    "client.TooltipHeightMixin",
-    "client.TooltipTextMixin"
+    "client.fluid.CameraMixin",
+    "client.fluid.FluidStateModelSetAccessor",
+    "client.fluid.FluidStateModelSetMixin",
+    "client.fluid.LavaFogEnvironmentMixin",
+    "client.fluid.WaterFogEnvironmentMixin",
+    "client.tooltip.TooltipBackgroundMixin",
+    "client.tooltip.TooltipHeightMixin",
+    "client.tooltip.TooltipTextMixin"
   ],
   "injectors": {
     "defaultRequire": 1
