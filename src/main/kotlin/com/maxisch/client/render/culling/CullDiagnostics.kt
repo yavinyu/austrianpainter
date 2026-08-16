@@ -15,19 +15,19 @@ import java.util.concurrent.atomic.AtomicLong
 object CullDiagnostics {
 
     private val paintedChecks = AtomicLong()
-    private val facesKept = AtomicLong()
+    private val facesChanged = AtomicLong()
 
     @JvmStatic
-    fun record(kept: Boolean) {
+    fun record(changed: Boolean) {
         paintedChecks.incrementAndGet()
-        if (kept) facesKept.incrementAndGet()
+        if (changed) facesChanged.incrementAndGet()
     }
 
     fun summary(): String =
-        "painted culling checks=${paintedChecks.get()}, faces kept=${facesKept.get()}"
+        "painted culling checks=${paintedChecks.get()}, faces changed=${facesChanged.get()}"
 
     fun reset() {
         paintedChecks.set(0)
-        facesKept.set(0)
+        facesChanged.set(0)
     }
 }
