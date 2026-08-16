@@ -31,13 +31,27 @@ internal class ZoneBounds(
     fun corners(): Pair<BlockPos, BlockPos> = BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
 }
 
-/** The five boss-room zones a player can aim a donor/palette at. */
-enum class BossZone(val key: String, internal val bounds: ZoneBounds) {
-    PILLARS("pillars", ZoneBounds(34, 225, 72, 112, 226, 74)),
-    S1("s1", ZoneBounds(111, 120, 92, 111, 123, 95)),
-    S2("s2", ZoneBounds(58, 133, 143, 62, 136, 143)),
-    S3("s3", ZoneBounds(-3, 120, 75, -3, 124, 79)),
-    S4("s4", ZoneBounds(64, 126, 50, 68, 130, 50)),
+/** The boss-room zones a player can aim a donor/palette at. Most are one box; [BossZone.CRUSHER]
+ *  is seven, one per crusher's full travel range, since a single moving block can visit any of
+ *  them - matched live the same way one zone's own box already keeps up with movement inside it. */
+enum class BossZone(val key: String, internal val bounds: List<ZoneBounds>) {
+    PILLARS("pillars", listOf(ZoneBounds(34, 225, 72, 112, 226, 74))),
+    S1("s1", listOf(ZoneBounds(111, 120, 92, 111, 123, 95))),
+    S2("s2", listOf(ZoneBounds(58, 133, 143, 62, 136, 143))),
+    S3("s3", listOf(ZoneBounds(-3, 120, 75, -3, 124, 79))),
+    S4("s4", listOf(ZoneBounds(64, 126, 50, 68, 130, 50))),
+    CRUSHER(
+        "crusher",
+        listOf(
+            ZoneBounds(-3, 107, 95, 19, 108, 97),
+            ZoneBounds(1, 117, 101, 4, 127, 102),
+            ZoneBounds(12, 117, 101, 15, 127, 102),
+            ZoneBounds(1, 117, 82, 3, 127, 84),
+            ZoneBounds(13, 117, 82, 15, 127, 84),
+            ZoneBounds(1, 117, 70, 3, 127, 72),
+            ZoneBounds(13, 117, 70, 15, 127, 72),
+        ),
+    ),
 }
 
 /**
@@ -61,14 +75,15 @@ object BossZones {
         ZoneSourceRule(BossZone.PILLARS, Blocks.COAL_BLOCK),
         ZoneSourceRule(BossZone.PILLARS, Blocks.PLAYER_HEAD),
         ZoneSourceRule(BossZone.PILLARS, Blocks.PLAYER_WALL_HEAD),
-        ZoneSourceRule(BossZone.S1, Blocks.SEA_LANTERN, default = AreaTarget.Donor(Blocks.OBSIDIAN)),
-        ZoneSourceRule(BossZone.S1, Blocks.OBSIDIAN, default = AreaTarget.Donor(Blocks.SEA_LANTERN)),
+        ZoneSourceRule(BossZone.S1, Blocks.SEA_LANTERN),
+        ZoneSourceRule(BossZone.S1, Blocks.OBSIDIAN),
         ZoneSourceRule(BossZone.S2, Blocks.REDSTONE_LAMP, lit = true),
         ZoneSourceRule(BossZone.S2, Blocks.REDSTONE_LAMP, lit = false),
-        ZoneSourceRule(BossZone.S3, Blocks.SEA_LANTERN, default = AreaTarget.Donor(Blocks.BLUE_TERRACOTTA)),
-        ZoneSourceRule(BossZone.S3, Blocks.BLUE_TERRACOTTA, default = AreaTarget.Donor(Blocks.SEA_LANTERN)),
-        ZoneSourceRule(BossZone.S4, Blocks.EMERALD_BLOCK, default = AreaTarget.Donor(Blocks.BLUE_TERRACOTTA)),
-        ZoneSourceRule(BossZone.S4, Blocks.BLUE_TERRACOTTA, default = AreaTarget.Donor(Blocks.EMERALD_BLOCK)),
+        ZoneSourceRule(BossZone.S3, Blocks.SEA_LANTERN),
+        ZoneSourceRule(BossZone.S3, Blocks.BLUE_TERRACOTTA),
+        ZoneSourceRule(BossZone.S4, Blocks.EMERALD_BLOCK),
+        ZoneSourceRule(BossZone.S4, Blocks.BLUE_TERRACOTTA),
+        ZoneSourceRule(BossZone.CRUSHER, Blocks.POLISHED_GRANITE),
     )
 
     /** True while either boss phase - P1 (conveyer) or P3 (devices) - is live. */
@@ -100,13 +115,15 @@ object BossZones {
         var maxZ = Int.MIN_VALUE
 
         for (zone in BossZone.entries) {
-            val (min, max) = zone.bounds.corners()
-            if (min.x < minX) minX = min.x
-            if (min.y < minY) minY = min.y
-            if (min.z < minZ) minZ = min.z
-            if (max.x > maxX) maxX = max.x
-            if (max.y > maxY) maxY = max.y
-            if (max.z > maxZ) maxZ = max.z
+            for (box in zone.bounds) {
+                val (min, max) = box.corners()
+                if (min.x < minX) minX = min.x
+                if (min.y < minY) minY = min.y
+                if (min.z < minZ) minZ = min.z
+                if (max.x > maxX) maxX = max.x
+                if (max.y > maxY) maxY = max.y
+                if (max.z > maxZ) maxZ = max.z
+            }
         }
 
         return BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
@@ -161,8 +178,9 @@ object BossZones {
         }
 }
 
-/** One zone's bounds plus what each of its (block, lit) sources becomes. */
-internal class ZoneEntry(val bounds: ZoneBounds, val targets: Map<ZoneKey, ColumnTarget>)
+/** One zone's bounds (one box for most zones, seven for [BossZone.CRUSHER]) plus what each of its
+ *  (block, lit) sources becomes. */
+internal class ZoneEntry(val bounds: List<ZoneBounds>, val targets: Map<ZoneKey, ColumnTarget>)
 
 /** The whole zone layer of one [PaintIndex] snapshot: the zones, plus the guard that keeps them
  *  free everywhere else. */
@@ -178,7 +196,7 @@ internal class ZoneRules(
         val key = ZoneKey(block, lit)
 
         for (entry in entries) {
-            if (!entry.bounds.contains(x, y, z)) continue
+            if (entry.bounds.none { it.contains(x, y, z) }) continue
             val target = entry.targets[key] ?: continue
             return target.resolve(x, y, z)
         }

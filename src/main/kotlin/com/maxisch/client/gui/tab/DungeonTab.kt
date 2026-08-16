@@ -71,6 +71,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         const val ZONE_S2 = 0xFFFF5555.toInt()
         const val ZONE_S3 = 0xFF5599FF.toInt()
         const val ZONE_S4 = 0xFF55FF55.toInt()
+        const val ZONE_CRUSHER = 0xFFC08040.toInt()
 
         const val GREY = 0xFFA0A0A0.toInt()
         const val YELLOW = 0xFFFFFF55.toInt()
@@ -479,6 +480,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         BossZone.S2 -> ZONE_S2
         BossZone.S3 -> ZONE_S3
         BossZone.S4 -> ZONE_S4
+        BossZone.CRUSHER -> ZONE_CRUSHER
     }
 
     // ------------------------------------------------------------------ row rendering
