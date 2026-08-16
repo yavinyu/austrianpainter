@@ -155,11 +155,11 @@ object ApSettings {
 
     // ---------------------------------------------------------------- boss zones (P1 conveyer, P3 devices)
 
-    /** P3 - the S1-S4 zones. P1 (the conveyer/[BossZone.PILLARS] zone) has its own [conveyorEnabled]:
-     *  they are two independent boss phases, not one feature with a shared switch. */
+    /** P3 - every zone with [BossZone.p1] unset. P1 has its own [conveyorEnabled]: they are two
+     *  independent boss phases, not one feature with a shared switch. */
     var zonesEnabled: Boolean = false
 
-    /** P1 - the conveyer zone ([BossZone.PILLARS]). */
+    /** P1 - every zone with [BossZone.p1] set. */
     var conveyorEnabled: Boolean = false
 
     /** Keyed "<zone>.<blockId>[.lit|.unlit]", same present-with-null-means-off contract and same
@@ -190,17 +190,19 @@ object ApSettings {
         save()
     }
 
-    private val conveyorKeyPrefix get() = "${BossZone.PILLARS.key}."
+    /** P1 can be more than one zone (see [BossZone.p1]), so scoping a reset to "P1" means "starts
+     *  with any P1 zone's key", not one fixed prefix. */
+    private val p1ZonePrefixes get() = BossZone.entries.filter { it.p1 }.map { "${it.key}." }
 
     /** P1 only, active config only. */
     fun resetConveyorRules() {
-        zoneRulesByConfig[activeConfig]?.keys?.removeAll { it.startsWith(conveyorKeyPrefix) }
+        zoneRulesByConfig[activeConfig]?.keys?.removeAll { key -> p1ZonePrefixes.any { key.startsWith(it) } }
         save()
     }
 
-    /** P3 only, active config only - every zone rule that is not [BossZone.PILLARS]. */
+    /** P3 only, active config only - every zone rule whose zone is not a P1 zone. */
     fun resetZoneRules() {
-        zoneRulesByConfig[activeConfig]?.keys?.removeAll { !it.startsWith(conveyorKeyPrefix) }
+        zoneRulesByConfig[activeConfig]?.keys?.removeAll { key -> p1ZonePrefixes.none { key.startsWith(it) } }
         save()
     }
 
