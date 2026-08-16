@@ -59,16 +59,25 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
             cullTest
         } else {
             Predicate<Direction?> { direction ->
-                cullTest.test(direction) &&
-                    (direction == null || !PaintCulling.keepFace(level, pos, state, direction))
+                if (direction == null) {
+                    cullTest.test(direction)
+                } else if (cullTest.test(direction)) {
+                    !PaintCulling.keepFace(level, pos, state, direction)
+                } else {
+                    PaintCulling.suppressFace(level, pos, state, direction)
+                }
             }
         }
 
         emitter.pushTransform { quad ->
             if (fixCulling) {
                 val culled = quad.cullFace()
-                if (culled != null && PaintCulling.keepFace(level, pos, state, culled)) {
-                    quad.cullFace(null)
+                if (culled != null) {
+                    if (PaintCulling.keepFace(level, pos, state, culled)) {
+                        quad.cullFace(null)
+                    } else if (PaintCulling.suppressFace(level, pos, state, culled)) {
+                        return@pushTransform false
+                    }
                 }
             }
             // finder and paint are non-null whenever palette is - see donorPalette above - Kotlin
