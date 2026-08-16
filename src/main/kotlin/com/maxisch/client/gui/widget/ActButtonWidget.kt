@@ -132,20 +132,23 @@ class ActButtonWidget(
             },
         )
 
-        val labelY = y + (height - font.lineHeight) / 2 + 1
         nvgSurface(
             graphics, x, y, width, height,
             nvg = {
+                val labelY = y + (height - Theme.textHeight()) / 2f
                 NVGUtils.drawCenteredText(
                     message.string,
                     (x + width / 2).toFloat(),
-                    labelY.toFloat(),
+                    labelY,
                     Theme.TEXT_SIZE,
                     Theme.c(text),
                     Theme.body,
                 )
             },
-            vanilla = { graphics.centeredText(font, message, x + width / 2, labelY, text) },
+            vanilla = {
+                val labelY = y + (height - font.lineHeight) / 2 + 1
+                graphics.centeredText(font, message, x + width / 2, labelY, text)
+            },
         )
     }
 

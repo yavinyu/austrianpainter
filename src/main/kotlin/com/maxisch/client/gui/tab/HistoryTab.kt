@@ -2,13 +2,14 @@ package com.maxisch.client.gui.tab
 
 import com.maxisch.client.KeyHints
 import com.maxisch.client.gui.PainterScreen
+import com.maxisch.client.gui.Theme
 import com.maxisch.client.gui.widget.ActButtonWidget
 import com.maxisch.client.gui.widget.CardWidget
+import com.maxisch.client.gui.widget.RowContent
 import com.maxisch.client.gui.widget.RowListWidget
 import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.paint.PaintHistory
 import com.maxisch.paint.PaintStorage
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.network.chat.Component
@@ -29,8 +30,6 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         const val GAP = 4
         const val GREY = 0xFFA0A0A0.toInt()
     }
-
-    private val font get() = Minecraft.getInstance().font
 
     private val headerLine = add(TextLineWidget(0, 0, 0, GREY))
 
@@ -71,7 +70,11 @@ class HistoryTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
                     step.label,
                     step.cost,
                 )
-                graphics.text(font, label, x + 4, y + 3, if (newest) 0xFFFFFF55.toInt() else 0xFFFFFFFF.toInt())
+                RowContent.label(
+                    graphics, x + 4, y, ROW_HEIGHT, x + width,
+                    text = label,
+                    colour = if (newest) 0xFFFFFF55.toInt() else Theme.INK,
+                )
             }
         },
     )

@@ -113,9 +113,6 @@ dependencies {
 
     implementation("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_version")}")
 
-    // Settings screen. Hard dependency.
-    implementation("dev.isxander:yet-another-config-lib:${project.property("yacl_version")}")
-
     // NanoVG, the 2D renderer com.maxisch.render.render2d draws through. Minecraft already puts the
     // LWJGL core and its natives on the classpath at this exact version, so only the nanovg module
     // is added - a second core would be a conflict, not an addition, hence isTransitive = false.
@@ -143,10 +140,6 @@ dependencies {
         implementation("org.lwjgl:lwjgl-nanovg:$lwjglVersion:$classifier") { isTransitive = false }
         include("org.lwjgl:lwjgl-nanovg:$lwjglVersion:$classifier") { isTransitive = false }
     }
-
-    // Only needed to compile the ModMenuApi entrypoint; the mod runs fine without it installed.
-    compileOnly("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
-    localRuntime("com.terraformersmc:modmenu:${project.property("modmenu_version")}")
 
     // Dev-run only, never shipped: logs the dev client into a real Microsoft account so it can join
     // online-mode servers. See the client run config for how it is hooked up.

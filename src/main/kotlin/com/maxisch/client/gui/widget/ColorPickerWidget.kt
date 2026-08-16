@@ -15,7 +15,7 @@ import net.minecraft.network.chat.CommonComponents
  * Saturation/value square, hue strip and alpha slider - the first colour picker in this mod's own UI.
  *
  * Until now the only way to pick a colour here was to type eight hex digits, or to leave the mod
- * entirely for YACL's picker behind ModMenu. The three controls are drawn with the gradient
+ * entirely for the old YACL screen's picker. The three controls are drawn with the gradient
  * primitives the NanoVG port brought in; nothing here is possible with vanilla's `fill`.
  *
  * State is HSVA rather than ARGB because that is what the controls address directly. Round-tripping

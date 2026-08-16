@@ -36,9 +36,16 @@ object TooltipChrome {
      * and no bounds, and a picture-in-picture element clips to the rect it is given.
      */
     fun drawText(graphics: GuiGraphicsExtractor, line: String, x: Int, y: Int) {
-        val width = Theme.textWidth(line).toInt() + 2
+        // This picture-in-picture surface hard-clips at its own edge (NvgBridge.renderToTexture
+        // sizes the render target exactly to it), and NanoVG's measured advance width does not
+        // perfectly match what it rasterises - the gap is small per glyph but adds up over a long
+        // line. +2 was not enough slack and clipped the last character or two of longer tooltips.
+        val width = kotlin.math.ceil(Theme.textWidth(line)).toInt() + 8
+        // Matches the per-line height TooltipHeightMixin reports to vanilla's own box-height math,
+        // so this surface has exactly as much room as the box built around it.
+        val height = kotlin.math.ceil(Theme.textHeight()).toInt() + 6
         nvgSurface(
-            graphics, x, y - 2, width, Theme.TEXT_SIZE.toInt() + 6,
+            graphics, x, y - 2, width, height,
             nvg = {
                 NVGUtils.drawText(line, x.toFloat(), y.toFloat(), Theme.TEXT_SIZE, Theme.c(Theme.INK), Theme.body)
             },

@@ -60,10 +60,11 @@ class CardWidget(
                     Theme.OUTLINE_THICKNESS,
                     Theme.c(Theme.RULE),
                 )
+                val headerTextY = y + (HEADER_HEIGHT - Theme.textHeight(Theme.TEXT_SIZE_SMALL)) / 2f
                 NVGUtils.drawText(
                     heading,
                     (x + PAD).toFloat(),
-                    (y + 4).toFloat(),
+                    headerTextY,
                     Theme.TEXT_SIZE_SMALL,
                     Theme.c(Theme.DIM),
                     Theme.body,
@@ -74,7 +75,7 @@ class CardWidget(
                     NVGUtils.drawText(
                         it,
                         x + width - PAD - trailingWidth,
-                        (y + 4).toFloat(),
+                        headerTextY,
                         Theme.TEXT_SIZE_SMALL,
                         Theme.c(Theme.MUTED),
                         Theme.body,

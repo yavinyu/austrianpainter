@@ -1,7 +1,6 @@
 package com.maxisch.client.gui
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
@@ -13,14 +12,9 @@ import net.minecraft.network.chat.Component
 object ConfirmAction {
     fun ask(current: Screen, title: Component, message: Component, onConfirm: () -> Unit) {
         Minecraft.getInstance().setScreenAndShow(
-            ConfirmScreen(
-                { confirmed ->
-                    Minecraft.getInstance().setScreenAndShow(current)
-                    if (confirmed) onConfirm()
-                },
-                title,
-                message,
-            ),
+            ApConfirmScreen(current, title, message) { confirmed ->
+                if (confirmed) onConfirm()
+            },
         )
     }
 }
