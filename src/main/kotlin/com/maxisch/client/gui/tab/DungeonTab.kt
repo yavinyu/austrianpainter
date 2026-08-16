@@ -33,15 +33,16 @@ import net.minecraft.world.item.ItemStack
  * Every F7/M7 repaint mechanic in one place, presented as Sadan's three real boss phases rather than
  * the two implementation-shaped groups this mod originally split them into:
  *
- * - **P1 "Conveyer"** - the static coal-block/player-head zone (`BossZone.PILLARS`).
+ * - **P1 "Conveyer"** - every zone with [BossZone.p1] set (the coal-block/player-head zone plus
+ *   any other zone that happens to live in this phase, e.g. a second, unrelated crusher).
  * - **P2 "Pillars"** - the four moving diorite arrays (`DeviceArray`/[DeviceColumns]).
- * - **P3 "Devices"** - the four remaining boss zones (`BossZone.S1`-`S4`).
+ * - **P3 "Devices"** - every zone with [BossZone.p1] unset (`BossZone.S1`-`S4`, `CRUSHER`, ...).
  *
  * Three independent lists side by side rather than one long stacked one - they are three genuinely
  * separate rule sets, each with its own Live toggle and Reset, and a single shared editor row at the
  * bottom acts on whichever list was clicked most recently. P1 and P3 both draw from
- * [BossZones.RULES] (filtered by zone) and share its one rule map underneath - only their Live flag
- * and Reset scope are independent, see [ApSettings.conveyorEnabled]/[ApSettings.zonesEnabled].
+ * [BossZones.RULES] (filtered by [BossZone.p1]) and share its one rule map underneath - only their
+ * Live flag and Reset scope are independent, see [ApSettings.conveyorEnabled]/[ApSettings.zonesEnabled].
  *
  * Edits batch into one rebuild on [onHidden] rather than one per click, same reasoning the two
  * screens this tab replaces already had: rebuilding the layer costs a full view rebuild.
@@ -93,7 +94,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     // Cards first: they are the ground their lists draw on top of.
     private val p1Card = add(
         CardWidget(Component.translatable("austrianpainter.card.p1")) {
-            Component.literal(BossZones.RULES.count { it.zone == BossZone.PILLARS }.toString())
+            Component.literal(BossZones.RULES.count { it.zone.p1 }.toString())
         },
     )
     private val p2Card = add(
@@ -103,7 +104,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
     )
     private val p3Card = add(
         CardWidget(Component.translatable("austrianpainter.card.p3")) {
-            Component.literal(BossZones.RULES.count { it.zone != BossZone.PILLARS }.toString())
+            Component.literal(BossZones.RULES.count { !it.zone.p1 }.toString())
         },
     )
 
@@ -123,10 +124,10 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     private val p1List = add(
         RowListWidget<ZoneSourceRule>(0, 0, 0, 0, ROW_HEIGHT).apply {
-            rows = BossZones.RULES.filter { it.zone == BossZone.PILLARS }
+            rows = BossZones.RULES.filter { it.zone.p1 }
             isSelected = { (selection as? Selection.Zone)?.rule == it }
             onRowClick = { rule -> selection = Selection.Zone(rule); refreshEditor() }
-            drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y, showZoneTag = false) }
+            drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y, showZoneTag = true) }
         },
     )
 
@@ -175,7 +176,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
 
     private val p3List = add(
         RowListWidget<ZoneSourceRule>(0, 0, 0, 0, ROW_HEIGHT).apply {
-            rows = BossZones.RULES.filter { it.zone != BossZone.PILLARS }
+            rows = BossZones.RULES.filter { !it.zone.p1 }
             isSelected = { (selection as? Selection.Zone)?.rule == it }
             onRowClick = { rule -> selection = Selection.Zone(rule); refreshEditor() }
             drawRow = { graphics, rule, x, y, _ -> drawZoneRow(graphics, rule, x, y, showZoneTag = true) }
@@ -498,6 +499,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         BossZone.S3 -> ZONE_S3
         BossZone.S4 -> ZONE_S4
         BossZone.CRUSHER -> ZONE_CRUSHER
+        BossZone.CRUSHER_P1 -> ZONE_CRUSHER
     }
 
     // ------------------------------------------------------------------ row rendering
@@ -577,7 +579,7 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
             (target as? AreaTarget.Donor)?.block,
         )
 
-        val list = if (rule.zone == BossZone.PILLARS) p1List else p3List
+        val list = if (rule.zone.p1) p1List else p3List
         RowContent.label(
             graphics,
             labelX,

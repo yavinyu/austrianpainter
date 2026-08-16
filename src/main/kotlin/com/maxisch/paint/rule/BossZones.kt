@@ -34,16 +34,23 @@ internal class ZoneBounds(
 }
 
 /** The boss-room zones a player can aim a donor/palette at. Most are one box; [BossZone.CRUSHER]
- *  is seven, one per crusher's full travel range, since a single moving block can visit any of
- *  them - matched live the same way one zone's own box already keeps up with movement inside it. */
-enum class BossZone(val key: String, internal val bounds: List<ZoneBounds>) {
-    PILLARS("pillars", listOf(ZoneBounds(34, 225, 72, 112, 226, 74))),
-    S1("s1", listOf(ZoneBounds(111, 120, 92, 111, 123, 95))),
-    S2("s2", listOf(ZoneBounds(58, 133, 143, 62, 136, 143))),
-    S3("s3", listOf(ZoneBounds(-3, 120, 75, -3, 124, 79))),
-    S4("s4", listOf(ZoneBounds(64, 126, 50, 68, 130, 50))),
+ *  and [BossZone.CRUSHER_P1] are several, one per crusher's full travel range, since a single
+ *  moving block can visit any of them - matched live the same way one zone's own box already
+ *  keeps up with movement inside it.
+ *
+ *  [p1] marks which phase-column ([DungeonTab]'s P1 "Conveyer") a zone's rules live under; every
+ *  other zone is P3 "Devices". It exists because that grouping is no longer just "is this
+ *  [PILLARS]" now that a second zone ([CRUSHER_P1]) also belongs to P1 while being otherwise
+ *  unrelated to it - a different in-game location with its own donor rule and reset scope. */
+enum class BossZone(val key: String, val p1: Boolean, internal val bounds: List<ZoneBounds>) {
+    PILLARS("pillars", true, listOf(ZoneBounds(34, 225, 72, 112, 226, 74))),
+    S1("s1", false, listOf(ZoneBounds(111, 120, 92, 111, 123, 95))),
+    S2("s2", false, listOf(ZoneBounds(58, 133, 143, 62, 136, 143))),
+    S3("s3", false, listOf(ZoneBounds(-3, 120, 75, -3, 124, 79))),
+    S4("s4", false, listOf(ZoneBounds(64, 126, 50, 68, 130, 50))),
     CRUSHER(
         "crusher",
+        false,
         listOf(
             ZoneBounds(-3, 107, 95, 19, 108, 97),
             ZoneBounds(1, 117, 101, 4, 127, 102),
@@ -52,6 +59,21 @@ enum class BossZone(val key: String, internal val bounds: List<ZoneBounds>) {
             ZoneBounds(13, 117, 82, 15, 127, 84),
             ZoneBounds(1, 117, 70, 3, 127, 72),
             ZoneBounds(13, 117, 70, 15, 127, 72),
+        ),
+    ),
+    CRUSHER_P1(
+        "crusher_p1",
+        true,
+        listOf(
+            ZoneBounds(96, 237, 53, 103, 239, 55),
+            ZoneBounds(98, 228, 82, 99, 228, 84),
+            ZoneBounds(52, 227, 82, 53, 227, 84),
+            ZoneBounds(39, 231, 82, 40, 231, 84),
+            ZoneBounds(47, 233, 82, 48, 233, 84),
+            ZoneBounds(60, 229, 82, 61, 229, 84),
+            ZoneBounds(49, 229, 80, 51, 230, 81),
+            ZoneBounds(95, 233, 79, 97, 233, 81),
+            ZoneBounds(106, 230, 82, 107, 230, 84),
         ),
     ),
 }
@@ -86,6 +108,7 @@ object BossZones {
         ZoneSourceRule(BossZone.S4, Blocks.EMERALD_BLOCK),
         ZoneSourceRule(BossZone.S4, Blocks.BLUE_TERRACOTTA),
         ZoneSourceRule(BossZone.CRUSHER, Blocks.POLISHED_GRANITE),
+        ZoneSourceRule(BossZone.CRUSHER_P1, Blocks.POLISHED_GRANITE),
     )
 
     /** True while either boss phase - P1 (conveyer) or P3 (devices) - is live. */
@@ -140,10 +163,10 @@ object BossZones {
         val byZone = LinkedHashMap<BossZone, MutableMap<ZoneKey, ColumnTarget>>()
 
         for (rule in RULES) {
-            // P1 (conveyer, BossZone.PILLARS) and P3 (devices, everything else) are independent
-            // boss phases with their own Live toggle - a rule from the off phase is skipped exactly
-            // as if it had no target set.
-            val phaseEnabled = if (rule.zone == BossZone.PILLARS) ApSettings.conveyorEnabled else ApSettings.zonesEnabled
+            // P1 (BossZone.p1 zones) and P3 (everything else) are independent boss phases with
+            // their own Live toggle - a rule from the off phase is skipped exactly as if it had no
+            // target set.
+            val phaseEnabled = if (rule.zone.p1) ApSettings.conveyorEnabled else ApSettings.zonesEnabled
             if (!phaseEnabled) continue
             val target = columnTarget(rule) ?: continue
             byZone.getOrPut(rule.zone) { LinkedHashMap() }[ZoneKey(rule.block, rule.lit)] = target
