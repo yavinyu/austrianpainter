@@ -3,9 +3,11 @@ package com.maxisch.paint.settings
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.maxisch.dungeon.detect.DungeonLocation
+import com.maxisch.dungeon.detect.DoorKind
 import com.maxisch.paint.settings.ApLog.LOGGER
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.Identifier
+import net.minecraft.world.level.block.Block
 import java.nio.file.Path
 import kotlin.io.path.notExists
 import kotlin.io.path.readText
@@ -94,6 +96,26 @@ object ApSettings {
 
     /** Whether orienting a dungeon room with no paint in the active room preset posts a chat line. */
     var notifyUnpaintedRooms: Boolean = true
+
+    /** Donor bound to each closed door kind; unset means that door is left untouched. */
+    private val doorDonors = HashMap<DoorKind, Block>()
+
+    /** 0-255 alpha each door kind renders at once painted; 255 (opaque) is the default/off state. */
+    private val doorOpacities = HashMap<DoorKind, Int>()
+
+    internal fun doorDonor(kind: DoorKind): Block? = doorDonors[kind]
+
+    internal fun setDoorDonor(kind: DoorKind, block: Block?) {
+        if (block == null) doorDonors.remove(kind) else doorDonors[kind] = block
+        save()
+    }
+
+    internal fun doorOpacity(kind: DoorKind): Int = doorOpacities[kind] ?: 255
+
+    internal fun setDoorOpacity(kind: DoorKind, opacity: Int) {
+        doorOpacities[kind] = opacity.coerceIn(0, 255)
+        save()
+    }
 
     /** Whether the one-time "press X to open the paint menu" chat line has already been sent. */
     var seenIntro: Boolean = false
@@ -238,9 +260,11 @@ object ApSettings {
 
     private val fluidOverridesByConfig = LinkedHashMap<String, FluidOverride>()
 
-    /** Null outside a boss fight, or inside one whose active preset has no override stored. */
-    private fun activeFluidOverride(): FluidOverride? =
-        if (DungeonLocation.inBoss) fluidOverridesByConfig[activeConfig] else null
+    /** Bound to whichever boss preset is currently active, not to physically standing in the arena -
+     *  fluid replacement is a pure rendering rule, not tied to a fixed in-arena position the way
+     *  device/zone rules are, so it applies wherever [activeConfig] does. Null when that config has
+     *  no override stored. */
+    private fun activeFluidOverride(): FluidOverride? = fluidOverridesByConfig[activeConfig]
 
     val effectiveWaterAsLava: Boolean get() = activeFluidOverride()?.waterAsLava ?: waterAsLava
     val effectiveLavaAsWater: Boolean get() = activeFluidOverride()?.lavaAsWater ?: lavaAsWater
@@ -267,9 +291,6 @@ object ApSettings {
     /** Room scope key to block-type preset, swapped in while that room is the active scope. */
     private val roomTypePresets = LinkedHashMap<String, String>()
 
-    /** Dungeon-room name to positional room preset, swapped in while that room is the active scope. */
-    private val roomPresets = LinkedHashMap<String, String>()
-
     /** Boss floor key (`B<floor>`) to positional boss preset, swapped in while it is the active scope. */
     private val bossPresets = LinkedHashMap<String, String>()
 
@@ -280,13 +301,6 @@ object ApSettings {
 
     fun bindRoomTypes(scopeKey: String, preset: String?) {
         if (preset == null) roomTypePresets.remove(scopeKey) else roomTypePresets[scopeKey] = preset
-        save()
-    }
-
-    fun roomPresetFor(key: String): String = roomPresets[key] ?: defaultRoomPreset
-
-    fun bindRoomPreset(key: String, preset: String?) {
-        if (preset == null) roomPresets.remove(key) else roomPresets[key] = preset
         save()
     }
 
@@ -332,9 +346,6 @@ object ApSettings {
             }
 
             PresetKind.ROOMS -> {
-                for (room in roomPresets.keys.toList()) {
-                    if (roomPresets[room] == from) roomPresets[room] = to
-                }
                 if (defaultRoomPreset == from) defaultRoomPreset = to
             }
 
@@ -464,19 +475,15 @@ object ApSettings {
                 roomTypePresets[room] = preset.asString
             }
 
-            roomPresets.clear()
             bossPresets.clear()
-            root.getAsJsonObject("roomPresets")?.entrySet()?.forEach { (room, preset) ->
-                roomPresets[room] = preset.asString
-            }
             root.getAsJsonObject("bossPresets")?.entrySet()?.forEach { (room, preset) ->
                 bossPresets[room] = preset.asString
             }
             // One-time migration: before rooms and bosses became independent preset kinds, both
-            // were bound through one combined map. Split it by key shape so old bindings survive.
+            // were bound through one combined map - the boss half still survives this way. Rooms no
+            // longer have a per-room binding at all, so that half of the old map is simply dropped.
             root.getAsJsonObject("roomBlockPresets")?.entrySet()?.forEach { (room, preset) ->
                 if (BOSS_KEY.matches(room)) bossPresets.putIfAbsent(room, preset.asString)
-                else roomPresets.putIfAbsent(room, preset.asString)
             }
 
             roomPalettePresets.clear()
@@ -542,6 +549,18 @@ object ApSettings {
                 if (recentDonors.size < MAX_RECENT_DONORS) recentDonors.add(id.asString)
             }
 
+            doorDonors.clear()
+            doorOpacities.clear()
+            root.getAsJsonObject("doors")?.entrySet()?.forEach { (name, value) ->
+                val kind = runCatching { DoorKind.valueOf(name) }.getOrNull() ?: return@forEach
+                val obj = value.asJsonObject
+                obj.get("donor")?.asString?.let { id ->
+                    Identifier.tryParse(id)?.takeIf { BuiltInRegistries.BLOCK.containsKey(it) }
+                        ?.let { doorDonors[kind] = BuiltInRegistries.BLOCK.getValue(it) }
+                }
+                obj.get("opacity")?.asInt?.let { doorOpacities[kind] = it.coerceIn(0, 255) }
+            }
+
             worldPresets.clear()
             root.getAsJsonObject("worldPresets")?.entrySet()?.forEach { (world, value) ->
                 val bound = value.asJsonObject
@@ -588,10 +607,6 @@ object ApSettings {
             val roomBindings = JsonObject()
             for ((room, preset) in roomTypePresets) roomBindings.addProperty(room, preset)
             add("roomTypePresets", roomBindings)
-
-            val roomPresetBindings = JsonObject()
-            for ((room, preset) in roomPresets) roomPresetBindings.addProperty(room, preset)
-            add("roomPresets", roomPresetBindings)
 
             val bossPresetBindings = JsonObject()
             for ((room, preset) in bossPresets) bossPresetBindings.addProperty(room, preset)
@@ -673,6 +688,19 @@ object ApSettings {
             val recent = JsonArray()
             for (id in recentDonors) recent.add(id)
             add("recentDonors", recent)
+
+            val doors = JsonObject()
+            for (kind in DoorKind.entries) {
+                val donor = doorDonors[kind] ?: continue
+                doors.add(
+                    kind.name,
+                    JsonObject().apply {
+                        addProperty("donor", BuiltInRegistries.BLOCK.getKey(donor).toString())
+                        addProperty("opacity", doorOpacity(kind))
+                    },
+                )
+            }
+            add("doors", doors)
 
             val bindings = JsonObject()
             for ((world, bound) in worldPresets) {

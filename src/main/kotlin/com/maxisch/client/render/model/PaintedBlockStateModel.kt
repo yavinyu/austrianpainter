@@ -1,12 +1,12 @@
 package com.maxisch.client.render.model
 
 import com.maxisch.paint.PaintIndex
+import com.maxisch.paint.rule.DoorZones
 import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter
-import net.fabricmc.fabric.api.client.renderer.v1.sprite.SpriteFinder
-import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.block.BlockAndTintGetter
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel
 import net.minecraft.client.resources.model.sprite.Material
 import net.minecraft.core.BlockPos
@@ -45,10 +45,15 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
 
         // Culling is decided from the real blocks, which paint contradicts: a stained glass block
         // repainted as clear glass stops hiding the faces around it. That applies to every block
-        // next to paint, not just painted ones, so this runs whenever any paint exists at all.
-        val fixCulling = !PaintIndex.isEmpty
+        // next to paint, not just painted ones, so this runs whenever any paint exists at all - and
+        // equally whenever a door is rendering translucent, donor or not, for the same reason.
+        val fixCulling = !PaintIndex.isEmpty || DoorZones.opacityActive()
 
-        if (palette == null && !fixCulling) {
+        // A door's opacity applies to its own real texture too, not just a donor's - so a door left
+        // unpainted but dialled translucent still has to take the slow path below.
+        val doorAlpha = DoorZones.opacityAt(pos, state.block)
+
+        if (palette == null && !fixCulling && doorAlpha == null) {
             super.emitQuads(emitter, level, pos, state, random, cullTest)
             return
         }
@@ -80,7 +85,7 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
                 emitter.square(direction, 0f, 0f, 1f, 1f, 0f)
                 emitter.materialBake(face.material, MutableQuadView.BAKE_LOCK_UV or MutableQuadView.BAKE_NORMALIZED)
                 if (face.tintIndex != -1) {
-                    val color = tintOf(paint!!.defaultBlockState(), level, pos, face.tintIndex)
+                    val color = QuadRetexture.tintOf(paint!!.defaultBlockState(), level, pos, face.tintIndex)
                     emitter.multiplyColor(ARGB.opaque(color))
                 }
                 emitter.tintIndex(-1)
@@ -102,7 +107,11 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
             }
             // finder and paint are non-null whenever palette is - see donorPalette above - Kotlin
             // just can't see it through the separate locals.
-            if (palette != null) retexture(quad, palette, finder!!, paint!!.defaultBlockState(), level, pos)
+            if (palette != null) QuadRetexture.apply(quad, palette, finder!!, paint!!.defaultBlockState(), level, pos)
+            if (doorAlpha != null) {
+                quad.chunkLayer(ChunkSectionLayer.TRANSLUCENT)
+                quad.multiplyColor(ARGB.color(doorAlpha, 0xFFFFFF))
+            }
             true
         }
         try {
@@ -123,13 +132,16 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
         state: BlockState,
         random: RandomSource,
     ): Any? {
-        if (!PaintIndex.isEmpty) {
+        if (!PaintIndex.isEmpty || DoorZones.opacityActive()) {
             if (PaintIndex.paintAt(pos, state) != null) return null
+            if (DoorZones.opacityAt(pos, state.block) != null) return null
 
             val cursor = BlockPos.MutableBlockPos()
             for (direction in Direction.entries) {
                 cursor.setWithOffset(pos, direction)
-                if (PaintIndex.paintAt(cursor, level.getBlockState(cursor)) != null) return null
+                val neighbourState = level.getBlockState(cursor)
+                if (PaintIndex.paintAt(cursor, neighbourState) != null) return null
+                if (DoorZones.opacityAt(cursor, neighbourState.block) != null) return null
             }
         }
         return super.createGeometryKey(level, pos, state, random)
@@ -158,46 +170,4 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
         val palette = RetexturePalette.of(paint)
         return if (palette.usable) base or palette.materialFlags else base
     }
-
-    private fun retexture(
-        quad: MutableQuadView,
-        palette: RetexturePalette,
-        finder: SpriteFinder,
-        paintedState: BlockState,
-        level: BlockAndTintGetter,
-        pos: BlockPos,
-    ) {
-        // Undo the source sprite's atlas placement so UVs are back in 0..1 of its own texture,
-        // then let materialBake place them into the borrowed sprite's atlas region.
-        val source = finder.find(quad)
-        val uSpan = source.u1 - source.u0
-        val vSpan = source.v1 - source.v0
-        if (uSpan != 0f && vSpan != 0f) {
-            for (i in 0 until 4) {
-                quad.uv(i, (quad.u(i) - source.u0) / uSpan, (quad.v(i) - source.v0) / vSpan)
-            }
-        }
-
-        val face = palette.forFace(quad.nominalFace())
-        quad.materialBake(face.material, MutableQuadView.BAKE_NORMALIZED)
-
-        // Tint has to come from the block we borrowed from, not the block that is really here.
-        // Bake it into vertex colour and clear the index so vanilla does not tint a second time
-        // using the original state.
-        if (face.tintIndex != -1) {
-            val color = tintOf(paintedState, level, pos, face.tintIndex)
-            quad.multiplyColor(ARGB.opaque(color))
-        }
-        quad.tintIndex(-1)
-    }
-
-    private fun tintOf(
-        state: BlockState,
-        level: BlockAndTintGetter,
-        pos: BlockPos,
-        tintIndex: Int,
-    ): Int = runCatching {
-        Minecraft.getInstance().blockColors.getTintSource(state, tintIndex)
-            ?.colorInWorld(state, level, pos) ?: -1
-    }.getOrDefault(-1)
 }

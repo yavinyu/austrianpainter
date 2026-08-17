@@ -94,7 +94,7 @@ class RetexturePalette private constructor(
                     fallbackEntry,
                     particle,
                     model.materialFlags(),
-                    true,
+                    usable = true,
                 )
             }
 
