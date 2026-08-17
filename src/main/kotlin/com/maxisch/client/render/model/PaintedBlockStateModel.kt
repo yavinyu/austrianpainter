@@ -69,6 +69,26 @@ class PaintedBlockStateModel(wrapped: BlockStateModel) : WrapperBlockStateModel(
             }
         }
 
+        // A target that bakes no geometry of its own - barrier chief among them - has no quads
+        // for retexture() to swap sprites onto, so a full cube is synthesized from the donor's
+        // palette instead. The block is still really there underneath, so a painted barrier keeps
+        // barrier's collision and outline while looking like the donor.
+        if (palette != null && !RetexturePalette.of(state.block).usable) {
+            for (direction in Direction.entries) {
+                if (paintAwareCullTest.test(direction)) continue
+                val face = palette.forFace(direction)
+                emitter.square(direction, 0f, 0f, 1f, 1f, 0f)
+                emitter.materialBake(face.material, MutableQuadView.BAKE_LOCK_UV or MutableQuadView.BAKE_NORMALIZED)
+                if (face.tintIndex != -1) {
+                    val color = tintOf(paint!!.defaultBlockState(), level, pos, face.tintIndex)
+                    emitter.multiplyColor(ARGB.opaque(color))
+                }
+                emitter.tintIndex(-1)
+                emitter.emit()
+            }
+            return
+        }
+
         emitter.pushTransform { quad ->
             if (fixCulling) {
                 val culled = quad.cullFace()
