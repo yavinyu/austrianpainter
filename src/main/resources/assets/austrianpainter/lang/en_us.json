@@ -297,6 +297,8 @@
   "austrianpainter.settings.replace_fluid_lava_as_water": "Lava looks like water",
   "austrianpainter.settings.replace_fluid_water_tint": "Tint water",
   "austrianpainter.settings.replace_fluid_lava_tint": "Tint lava",
+  "austrianpainter.settings.replace_fluid_tint_flat": "Flat",
+  "austrianpainter.settings.replace_fluid_tint_flat.desc": "Render the tint as a flat color instead of multiplying it over the active texture pack's water/lava texture. Always matches the picked color exactly, but loses the wave/flow texture while tinted.",
   "austrianpainter.settings.replace_fluid_custom_boss": "Custom for this boss",
   "austrianpainter.settings.area": "Area selection",
   "austrianpainter.settings.area_outline": "Outline colour",

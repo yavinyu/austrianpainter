@@ -214,19 +214,23 @@ object ApSettings {
     var lavaAsWater: Boolean = false
     var waterTintEnabled: Boolean = false
     var waterTintColor: Int = -1
+    var waterTintFlat: Boolean = false
     var lavaTintEnabled: Boolean = false
     var lavaTintColor: Int = -1
+    var lavaTintFlat: Boolean = false
 
     /** One field left null means "fall back to the matching global value above" - same
      *  present-with-null-means-off shape [deviceRulesByConfig] uses, just per field instead of
-     *  per rule since there are only six of these rather than dozens. */
+     *  per rule since there are only eight of these rather than dozens. */
     data class FluidOverride(
         val waterAsLava: Boolean? = null,
         val lavaAsWater: Boolean? = null,
         val waterTintEnabled: Boolean? = null,
         val waterTintColor: Int? = null,
+        val waterTintFlat: Boolean? = null,
         val lavaTintEnabled: Boolean? = null,
         val lavaTintColor: Int? = null,
+        val lavaTintFlat: Boolean? = null,
     )
 
     private val fluidOverridesByConfig = LinkedHashMap<String, FluidOverride>()
@@ -239,8 +243,10 @@ object ApSettings {
     val effectiveLavaAsWater: Boolean get() = activeFluidOverride()?.lavaAsWater ?: lavaAsWater
     val effectiveWaterTintEnabled: Boolean get() = activeFluidOverride()?.waterTintEnabled ?: waterTintEnabled
     val effectiveWaterTintColor: Int get() = activeFluidOverride()?.waterTintColor ?: waterTintColor
+    val effectiveWaterTintFlat: Boolean get() = activeFluidOverride()?.waterTintFlat ?: waterTintFlat
     val effectiveLavaTintEnabled: Boolean get() = activeFluidOverride()?.lavaTintEnabled ?: lavaTintEnabled
     val effectiveLavaTintColor: Int get() = activeFluidOverride()?.lavaTintColor ?: lavaTintColor
+    val effectiveLavaTintFlat: Boolean get() = activeFluidOverride()?.lavaTintFlat ?: lavaTintFlat
 
     /** Whether [config] currently has an override bucket at all, for the DungeonTab toggle. */
     fun hasFluidOverride(config: String): Boolean = fluidOverridesByConfig.containsKey(config)
@@ -444,8 +450,10 @@ object ApSettings {
             lavaAsWater = root.get("lavaAsWater")?.asBoolean ?: false
             waterTintEnabled = root.get("waterTintEnabled")?.asBoolean ?: false
             waterTintColor = root.get("waterTintColor")?.asInt ?: -1
+            waterTintFlat = root.get("waterTintFlat")?.asBoolean ?: false
             lavaTintEnabled = root.get("lavaTintEnabled")?.asBoolean ?: false
             lavaTintColor = root.get("lavaTintColor")?.asInt ?: -1
+            lavaTintFlat = root.get("lavaTintFlat")?.asBoolean ?: false
 
             roomTypePresets.clear()
             root.getAsJsonObject("roomTypePresets")?.entrySet()?.forEach { (room, preset) ->
@@ -518,8 +526,10 @@ object ApSettings {
                     lavaAsWater = obj.get("lavaAsWater")?.asBoolean,
                     waterTintEnabled = obj.get("waterTintEnabled")?.asBoolean,
                     waterTintColor = obj.get("waterTintColor")?.asInt,
+                    waterTintFlat = obj.get("waterTintFlat")?.asBoolean,
                     lavaTintEnabled = obj.get("lavaTintEnabled")?.asBoolean,
                     lavaTintColor = obj.get("lavaTintColor")?.asInt,
+                    lavaTintFlat = obj.get("lavaTintFlat")?.asBoolean,
                 )
             }
 
@@ -565,8 +575,10 @@ object ApSettings {
             addProperty("lavaAsWater", lavaAsWater)
             addProperty("waterTintEnabled", waterTintEnabled)
             addProperty("waterTintColor", waterTintColor)
+            addProperty("waterTintFlat", waterTintFlat)
             addProperty("lavaTintEnabled", lavaTintEnabled)
             addProperty("lavaTintColor", lavaTintColor)
+            addProperty("lavaTintFlat", lavaTintFlat)
 
             val roomBindings = JsonObject()
             for ((room, preset) in roomTypePresets) roomBindings.addProperty(room, preset)
@@ -644,8 +656,10 @@ object ApSettings {
                         override.lavaAsWater?.let { addProperty("lavaAsWater", it) }
                         override.waterTintEnabled?.let { addProperty("waterTintEnabled", it) }
                         override.waterTintColor?.let { addProperty("waterTintColor", it) }
+                        override.waterTintFlat?.let { addProperty("waterTintFlat", it) }
                         override.lavaTintEnabled?.let { addProperty("lavaTintEnabled", it) }
                         override.lavaTintColor?.let { addProperty("lavaTintColor", it) }
+                        override.lavaTintFlat?.let { addProperty("lavaTintFlat", it) }
                     },
                 )
             }
