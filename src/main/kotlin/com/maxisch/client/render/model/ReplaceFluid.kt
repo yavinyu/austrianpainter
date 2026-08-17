@@ -104,13 +104,26 @@ object ReplaceFluid {
         if (!tintEnabled) return if (swap) base else null
 
         val tintColor = if (isWater) ApSettings.effectiveWaterTintColor else ApSettings.effectiveLavaTintColor
+        val flat = if (isWater) ApSettings.effectiveWaterTintFlat else ApSettings.effectiveLavaTintFlat
+
+        // Tint is a GPU multiply against the sprite, not a color override - so it only reads as
+        // the exact picked color when the sprite is near-neutral, which is true of vanilla's pale
+        // water_still.png by accident and false of vanilla's saturated lava_still.png and of most
+        // resource packs that bake real color into their fluid textures. "Flat" mode swaps in this
+        // mod's own solid-white sprite so the multiply always lands on the picked color exactly,
+        // trading away the sprite's wave/flow texture to do it.
+        val flatMaterial = if (flat) PaintRenderSupport.flatTintMaterial() else null
+        val stillMaterial = flatMaterial ?: base.stillMaterial()
+        val flowingMaterial = flatMaterial ?: base.flowingMaterial()
+        val overlayMaterial = flatMaterial ?: base.overlayMaterial()
+
         return FluidModel(
             // Lava's vanilla SOLID layer never blends alpha, so opacity would silently do
             // nothing unless tinting always forces a blended layer.
             ChunkSectionLayer.TRANSLUCENT,
-            base.stillMaterial(),
-            base.flowingMaterial(),
-            base.overlayMaterial(),
+            stillMaterial,
+            flowingMaterial,
+            overlayMaterial,
             BlockTintSources.constant(tintColor),
         )
     }
