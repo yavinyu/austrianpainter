@@ -80,6 +80,9 @@ object RoomScanner {
     /** Every room that knows where its marker corner is, and so can have its paint projected. */
     internal fun orientedRooms(): List<ScannedRoom> = rooms.values.filter { it.oriented }
 
+    /** Every grid cell classified as a doorway rather than a room, for [DoorScanner] to probe. */
+    internal fun doorCells(): List<DoorTile> = grid.filterIsInstance<DoorTile>()
+
     /**
      * The scope a room's paint is stored against. Rotation is inverted here because [ScannedRoom]
      * records which corner the marker sits on, while [RoomTransform] wants the turn that takes a

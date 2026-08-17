@@ -41,6 +41,9 @@ object PaintStorage {
     /** A room finished scanning, so its paint can now be projected into the index. */
     fun onRoomLayoutChanged() = PaintSession.onRoomLayoutChanged()
 
+    /** A door cell resolved to a kind, so its zone can now be projected into the index. */
+    fun onDoorLayoutChanged() = PaintSession.onDoorLayoutChanged()
+
     /** Room paint as a whole was switched on or off; see [PaintSession.onRoomVisibilityChanged]. */
     fun onRoomVisibilityChanged() = PaintSession.onRoomVisibilityChanged()
 
