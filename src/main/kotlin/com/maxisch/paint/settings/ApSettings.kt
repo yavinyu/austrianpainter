@@ -92,6 +92,9 @@ object ApSettings {
     /** Master switch for every PaintKeys action; the KeyMapping objects stay registered either way. */
     var keybindsEnabled: Boolean = true
 
+    /** Whether orienting a dungeon room with no paint in the active room preset posts a chat line. */
+    var notifyUnpaintedRooms: Boolean = true
+
     /** Whether the one-time "press X to open the paint menu" chat line has already been sent. */
     var seenIntro: Boolean = false
 
@@ -436,6 +439,7 @@ object ApSettings {
             showHints = root.get("showHints")?.asBoolean ?: true
             showLookingAt = root.get("showLookingAt")?.asBoolean ?: true
             keybindsEnabled = root.get("keybindsEnabled")?.asBoolean ?: true
+            notifyUnpaintedRooms = root.get("notifyUnpaintedRooms")?.asBoolean ?: true
             // Defaults false so configs written before the hint existed still get it once.
             seenIntro = root.get("seenIntro")?.asBoolean ?: false
             dungeonRoomScope = root.get("dungeonRoomScope")?.asBoolean ?: true
@@ -563,6 +567,7 @@ object ApSettings {
             addProperty("showHints", showHints)
             addProperty("showLookingAt", showLookingAt)
             addProperty("keybindsEnabled", keybindsEnabled)
+            addProperty("notifyUnpaintedRooms", notifyUnpaintedRooms)
             addProperty("seenIntro", seenIntro)
             addProperty("dungeonRoomScope", dungeonRoomScope)
             addProperty("areaOutlineColor", areaOutlineColor)

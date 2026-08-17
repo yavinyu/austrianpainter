@@ -5,11 +5,16 @@ import com.maxisch.client.gui.ConfirmAction
 import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.render.overlay.BlockHighlight
 import com.maxisch.client.render.overlay.PaintedOverlay
+import com.maxisch.dungeon.detect.RoomScanner
+import com.maxisch.dungeon.room.RoomTransform
 import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.rule.AreaSelector
 import com.maxisch.paint.rule.AreaTarget
 import com.maxisch.paint.rule.PaintFilter
 import com.maxisch.paint.rule.PaintRules
+import com.maxisch.paint.ChunkRebuild
+import com.maxisch.paint.PaintIndexBuilder
+import com.maxisch.paint.PaintSession
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.preset.PalettePreset
 import com.maxisch.paint.preset.PresetStores
@@ -160,6 +165,93 @@ class AreaScanLogic(private val screen: PainterScreen) {
     fun replaceRandom() {
         assignPalette()
         replace()
+    }
+
+    fun hasOrientedRooms(): Boolean = RoomScanner.orientedRooms().isNotEmpty()
+
+    /**
+     * Applies the rules in hand to every dungeon room oriented so far, instead of just the box on
+     * screen. [PaintRules.paintGroups] cannot be reused here - it files everything under whatever
+     * room the player is physically standing in right now, not under where each position actually
+     * is - so this writes straight into the active room preset with each room's own relative
+     * coordinates, the same transform [PaintRules]'s own room-scoped writes use.
+     */
+    fun applyRulesetToAllRooms() {
+        val level = Minecraft.getInstance().level ?: return
+        if (PaintArea.rules.isEmpty()) return
+        val rooms = RoomScanner.orientedRooms()
+        if (rooms.isEmpty()) {
+            screen.status(Component.translatable("austrianpainter.area.no_rooms"))
+            return
+        }
+
+        ConfirmAction.ask(
+            screen,
+            Component.translatable("austrianpainter.area.apply_all_rooms.confirm.title"),
+            Component.translatable("austrianpainter.area.apply_all_rooms.confirm.message", rooms.size),
+        ) {
+            val savedC1 = PaintArea.corner1
+            val savedC2 = PaintArea.corner2
+            val preset = PresetStores.rooms.active
+            val random = RandomSource.create()
+            val pickers = HashMap<String, PalettePreset.Picker?>()
+            var totalPainted = 0
+            var roomsTouched = 0
+
+            for (room in rooms) {
+                val scope = RoomScanner.scopeFor(room) ?: continue
+                val (min, max) = room.footprint(level.minY) ?: continue
+                PaintArea.setCorner(true, min)
+                PaintArea.setCorner(false, max)
+
+                val slice = preset.forKey(scope.key)
+                var paintedHere = 0
+                for ((selector, positions) in AreaScan.positionsFor(level, PaintArea.rules.keys)) {
+                    if (positions.isEmpty()) continue
+                    when (val target = PaintArea.rules[selector]) {
+                        is AreaTarget.Donor -> for (pos in positions) {
+                            slice.put(RoomTransform.toRelative(pos, scope.origin, scope.rotation).asLong(), target.block)
+                            paintedHere++
+                        }
+
+                        is AreaTarget.Palette -> {
+                            val picker = pickers.getOrPut(target.name) { paletteNamed(target.name).picker() }
+                                ?: continue
+                            for (pos in positions) {
+                                slice.put(
+                                    RoomTransform.toRelative(pos, scope.origin, scope.rotation).asLong(),
+                                    picker.next(random),
+                                )
+                                paintedHere++
+                            }
+                        }
+
+                        null -> Unit
+                    }
+                }
+                if (paintedHere > 0) {
+                    totalPainted += paintedHere
+                    roomsTouched++
+                }
+            }
+
+            PaintArea.corner1 = savedC1
+            PaintArea.corner2 = savedC2
+
+            PaintIndexBuilder.invalidateRooms()
+            PaintIndexBuilder.refresh()
+            PaintSession.markDirty()
+            ChunkRebuild.markAll()
+
+            screen.status(
+                Component.translatable(
+                    "austrianpainter.area.applied_all_rooms",
+                    totalPainted,
+                    roomsTouched,
+                    rooms.size,
+                ),
+            )
+        }
     }
 
     /** Redraws the palette-drawn part of the previous apply. Same positions, a fresh roll. */
