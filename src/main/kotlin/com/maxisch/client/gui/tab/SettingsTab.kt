@@ -251,6 +251,12 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         it.message = Component.translatable("austrianpainter.settings.room_scope")
     }
 
+    private val notifyUnpaintedToggle =
+        add(ToggleSwitchWidget(0, 0, 0, 0, ApSettings.notifyUnpaintedRooms, GREY) { toggleNotifyUnpaintedRooms() })
+    private val notifyUnpaintedLabelLine = add(TextLineWidget(0, 0, 0, WHITE)).also {
+        it.message = Component.translatable("austrianpainter.settings.notify_unpainted_rooms")
+    }
+
     private val rescanButton = add(
         ActButtonWidget.builder(Component.translatable("austrianpainter.settings.rescan")) { RoomTracker.reset() }
             .width(1)
@@ -492,14 +498,20 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         var dy = bottomTop + CardWidget.HEADER_HEIGHT
         val dungeonInner = rightWidth - PAD * 2
         
-        roomScopeToggle.setRectangle(TOGGLE_W, TOGGLE_H, dungeonX + PAD, dy + 3)
-        roomScopeLabelLine.setRectangle(
-            (dungeonInner - TOGGLE_W - 4).coerceAtLeast(20),
-            TextLineWidget.HEIGHT,
-            dungeonX + PAD + TOGGLE_W + 4,
-            dy + 5,
-        )
-        dy += ROW + ROW_GAP
+        for ((toggle, label) in listOf(
+            roomScopeToggle to roomScopeLabelLine,
+            notifyUnpaintedToggle to notifyUnpaintedLabelLine,
+        )) {
+            toggle.setRectangle(TOGGLE_W, TOGGLE_H, dungeonX + PAD, dy + 3)
+            label.setRectangle(
+                (dungeonInner - TOGGLE_W - 4).coerceAtLeast(20),
+                TextLineWidget.HEIGHT,
+                dungeonX + PAD + TOGGLE_W + 4,
+                dy + 5,
+            )
+            dy += ROW
+        }
+        dy += ROW_GAP
         for (button in listOf(rescanButton, unbindTypesButton, unbindBlocksButton, unbindPalettesButton)) {
             button.setRectangle(dungeonInner, ROW, dungeonX + PAD, dy)
             dy += ROW + 4
@@ -654,6 +666,12 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         refresh()
     }
 
+    private fun toggleNotifyUnpaintedRooms() {
+        ApSettings.notifyUnpaintedRooms = !ApSettings.notifyUnpaintedRooms
+        ApSettings.save()
+        refresh()
+    }
+
     private fun toggleWaterAsLava() {
         ApSettings.waterAsLava = !ApSettings.waterAsLava
         ApSettings.save()
@@ -719,6 +737,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         overlayRadiusStepper.value = ApSettings.paintedOverlayRadius
 
         roomScopeToggle.checked = ApSettings.dungeonRoomScope
+        notifyUnpaintedToggle.checked = ApSettings.notifyUnpaintedRooms
 
         waterAsLavaToggle.checked = ApSettings.waterAsLava
         lavaAsWaterToggle.checked = ApSettings.lavaAsWater

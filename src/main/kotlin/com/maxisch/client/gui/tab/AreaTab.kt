@@ -20,6 +20,7 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
 import com.maxisch.client.gui.widget.ApEditBox
 import net.minecraft.client.gui.components.EditBox
+import net.minecraft.client.gui.components.Tooltip
 import net.minecraft.client.gui.navigation.ScreenRectangle
 import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
@@ -160,6 +161,16 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             logic.loadRuleset()
             refreshButtons()
         }.width(100).build(),
+    )
+
+    private val applyAllRoomsButton = add(
+        ActButtonWidget.builder(Component.translatable("austrianpainter.area.apply_all_rooms")) {
+            logic.applyRulesetToAllRooms()
+            refreshButtons()
+        }
+            .width(100)
+            .tooltip(Tooltip.create(Component.translatable("austrianpainter.area.apply_all_rooms.desc")))
+            .build(),
     )
 
     private val clearMappingButton = add(
@@ -416,6 +427,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
             previewButton, clearPreviewButton,
             clearSelectionButton, reapplyButton,
             saveRulesetButton, loadRulesetButton,
+            applyAllRoomsButton,
         )
         y += CardWidget.PAD - GAP
         actionsCard.setRectangle(leftWidth, y - actionsTop, x, actionsTop)
@@ -561,6 +573,7 @@ class AreaTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab.ar
         reapplyButton.active = boxReady && PaintArea.lastRules.isNotEmpty()
         saveRulesetButton.active = PaintArea.hasRules
         loadRulesetButton.active = !logic.ruleset().isEmpty()
+        applyAllRoomsButton.active = PaintArea.hasRules && logic.hasOrientedRooms()
 
         clearMappingButton.active = PaintArea.hasRules
         unpaintSelectedButton.active = boxReady && hasSelection
