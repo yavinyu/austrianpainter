@@ -32,7 +32,7 @@ class ReplaceFluidBossScreen(parent: Screen?) :
 
     private companion object {
         const val PANEL_WIDTH = 260
-        const val PANEL_HEIGHT = 196
+        const val PANEL_HEIGHT = 236
         const val PAD = 12
         const val ROW = 20
         const val TOGGLE_W = 30
@@ -49,8 +49,10 @@ class ReplaceFluidBossScreen(parent: Screen?) :
     private lateinit var lavaAsWaterToggle: ToggleSwitchWidget
     private lateinit var waterTintToggle: ToggleSwitchWidget
     private lateinit var waterTintSwatch: ColorSwatchWidget
+    private lateinit var waterTintFlatToggle: ToggleSwitchWidget
     private lateinit var lavaTintToggle: ToggleSwitchWidget
     private lateinit var lavaTintSwatch: ColorSwatchWidget
+    private lateinit var lavaTintFlatToggle: ToggleSwitchWidget
 
     private val rowLabels = mutableListOf<Pair<Component, Int>>()
 
@@ -116,6 +118,14 @@ class ReplaceFluidBossScreen(parent: Screen?) :
         }
         y += ROW
 
+        waterTintFlatToggle = addRenderableWidget(
+            ToggleSwitchWidget(contentX, y, TOGGLE_W, TOGGLE_H, ApSettings.effectiveWaterTintFlat, Theme.AMBER) {
+                edit { it.copy(waterTintFlat = !ApSettings.effectiveWaterTintFlat) }
+            },
+        )
+        label("austrianpainter.settings.replace_fluid_tint_flat", y + 3)
+        y += ROW
+
         lavaTintToggle = addRenderableWidget(
             ToggleSwitchWidget(contentX, y, TOGGLE_W, TOGGLE_H, ApSettings.effectiveLavaTintEnabled, Theme.AMBER) {
                 edit { it.copy(lavaTintEnabled = !ApSettings.effectiveLavaTintEnabled) }
@@ -138,6 +148,14 @@ class ReplaceFluidBossScreen(parent: Screen?) :
                 )
             }
         }
+        y += ROW
+
+        lavaTintFlatToggle = addRenderableWidget(
+            ToggleSwitchWidget(contentX, y, TOGGLE_W, TOGGLE_H, ApSettings.effectiveLavaTintFlat, Theme.AMBER) {
+                edit { it.copy(lavaTintFlat = !ApSettings.effectiveLavaTintFlat) }
+            },
+        )
+        label("austrianpainter.settings.replace_fluid_tint_flat", y + 3)
         y += ROW + GAP
 
         addRenderableWidget(
@@ -162,8 +180,10 @@ class ReplaceFluidBossScreen(parent: Screen?) :
                     lavaAsWater = ApSettings.effectiveLavaAsWater,
                     waterTintEnabled = ApSettings.effectiveWaterTintEnabled,
                     waterTintColor = ApSettings.effectiveWaterTintColor,
+                    waterTintFlat = ApSettings.effectiveWaterTintFlat,
                     lavaTintEnabled = ApSettings.effectiveLavaTintEnabled,
                     lavaTintColor = ApSettings.effectiveLavaTintColor,
+                    lavaTintFlat = ApSettings.effectiveLavaTintFlat,
                 )
             }
         }
@@ -181,7 +201,11 @@ class ReplaceFluidBossScreen(parent: Screen?) :
 
     private fun refreshEnabled() {
         val on = ApSettings.hasFluidOverride(config)
-        for (widget in listOf(waterAsLavaToggle, lavaAsWaterToggle, waterTintToggle, lavaTintToggle, waterTintSwatch, lavaTintSwatch)) {
+        for (widget in listOf(
+            waterAsLavaToggle, lavaAsWaterToggle,
+            waterTintToggle, lavaTintToggle, waterTintSwatch, lavaTintSwatch,
+            waterTintFlatToggle, lavaTintFlatToggle,
+        )) {
             widget.active = on
         }
     }
@@ -193,6 +217,8 @@ class ReplaceFluidBossScreen(parent: Screen?) :
         lavaTintToggle.checked = ApSettings.effectiveLavaTintEnabled
         waterTintSwatch.color = ApSettings.effectiveWaterTintColor
         lavaTintSwatch.color = ApSettings.effectiveLavaTintColor
+        waterTintFlatToggle.checked = ApSettings.effectiveWaterTintFlat
+        lavaTintFlatToggle.checked = ApSettings.effectiveLavaTintFlat
     }
 
     override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
