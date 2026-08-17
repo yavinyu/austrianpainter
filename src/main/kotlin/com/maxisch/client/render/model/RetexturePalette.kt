@@ -42,6 +42,7 @@ class RetexturePalette private constructor(
         /** Model bakery output changed under us; drop everything derived from it. */
         fun invalidate() = CACHE.clear()
 
+        @JvmStatic
         fun of(block: Block): RetexturePalette = CACHE.computeIfAbsent(block, ::build)
 
         private fun build(block: Block): RetexturePalette {
