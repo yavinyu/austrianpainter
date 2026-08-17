@@ -28,6 +28,9 @@ object RoomTracker {
     /** Last [RoomScanner.layoutVersion] the paint side was told about. */
     private var lastLayout = RoomScanner.layoutVersion
 
+    /** Last [DoorScanner.version] the paint side was told about. */
+    private var lastDoorVersion = DoorScanner.version
+
     /** Edge-detects [ApSettings.dungeonRoomScope], which shows or hides every room's paint at once. */
     private var roomScopeActive = ApSettings.dungeonRoomScope
 
@@ -39,6 +42,7 @@ object RoomTracker {
         } else if (wasInDungeon) {
             wasInDungeon = false
             RoomScanner.reset()
+            DoorScanner.reset()
         }
 
         val roomScope = ApSettings.dungeonRoomScope
@@ -77,6 +81,13 @@ object RoomTracker {
             lastLayout = RoomScanner.layoutVersion
             PaintStorage.onRoomLayoutChanged()
         }
+
+        // Same idea, for a door that just resolved to a kind: only its own footprint needs a
+        // rebuild, and nothing else would notice it appearing.
+        if (DoorScanner.version != lastDoorVersion) {
+            lastDoorVersion = DoorScanner.version
+            PaintStorage.onDoorLayoutChanged()
+        }
     }
 
     /**
@@ -86,6 +97,7 @@ object RoomTracker {
     fun reset() {
         DungeonLocation.reset()
         RoomScanner.reset()
+        DoorScanner.reset()
         wasInDungeon = false
         // Re-arms the edge, so joining a fresh instance inside the arena still fires it.
         deviceActive = false
@@ -126,6 +138,7 @@ object RoomTracker {
         if (DungeonLocation.inBoss) return RoomScope("B$floor", BlockPos.ZERO, 0, isBoss = true)
 
         RoomScanner.tick()
+        DoorScanner.tick()
 
         val player = Minecraft.getInstance().player ?: return null
         val room = RoomScanner.roomAt(player.position()) ?: return null

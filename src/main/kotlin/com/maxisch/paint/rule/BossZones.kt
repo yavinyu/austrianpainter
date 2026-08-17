@@ -228,6 +228,14 @@ internal class ZoneRules(
         return null
     }
 
+    /** Combines two independent zone layers - boss zones and door zones - into one, so [PaintIndex]
+     *  only ever has to consult a single [ZoneRules] regardless of how many layers feed it. */
+    fun merge(other: ZoneRules): ZoneRules {
+        if (empty) return other
+        if (other.empty) return this
+        return ZoneRules(entries + other.entries, ReferenceOpenHashSet(sources + other.sources))
+    }
+
     companion object {
         val EMPTY = ZoneRules(emptyList(), ReferenceOpenHashSet())
     }

@@ -11,6 +11,7 @@ import com.maxisch.paint.settings.ApPaths
 import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.rule.BossZones
 import com.maxisch.paint.rule.DeviceColumns
+import com.maxisch.paint.rule.DoorZones
 import com.maxisch.paint.preset.PresetStores
 
 /**
@@ -84,8 +85,8 @@ object PaintSession {
         val presetChanged = wanted != null && wanted != PresetStores.types.activeName
         if (presetChanged) PresetStores.types.load(wanted)
 
-        // Rooms and bosses are independent preset kinds, each with its own global default plus a
-        // per-key override - unlike blocks/types there is no per-world fallback to chain through.
+        // Boss presets are still per-arena; room presets no longer have a per-room override - one
+        // active rooms preset always governs every room, so a normal room never swaps it here.
         val roomChanged = when {
             next == null -> false
             next.isBoss -> {
@@ -104,12 +105,7 @@ object PaintSession {
                     }
                 }
             }
-            else -> {
-                val wantedRoom = ApSettings.roomPresetFor(next.key)
-                (wantedRoom != PresetStores.rooms.activeName).also { changed ->
-                    if (changed) PresetStores.rooms.load(wantedRoom)
-                }
-            }
+            else -> false
         }
 
         // Palettes only feed future applies, so swapping one never needs an index or chunk rebuild.
@@ -141,12 +137,8 @@ object PaintSession {
 
         flush()
         PaintIndexBuilder.invalidateRooms()
-        // While a room is in scope onScopeChanged owns which room preset is loaded; overriding it
-        // with the global default here would drop that room's own binding.
-        if (scope == null) {
-            val wantedRoom = ApSettings.defaultRoomPreset
-            if (wantedRoom != PresetStores.rooms.activeName) PresetStores.rooms.load(wantedRoom)
-        }
+        val wantedRoom = ApSettings.defaultRoomPreset
+        if (wantedRoom != PresetStores.rooms.activeName) PresetStores.rooms.load(wantedRoom)
 
         PaintIndexBuilder.refresh()
         ChunkRebuild.markAll()
@@ -187,6 +179,16 @@ object PaintSession {
                 Component.translatable("austrianpainter.room.unpainted", unpainted.size, unpainted.joinToString(", ")),
             )
         }
+    }
+
+    /**
+     * A door cell just resolved to a kind (entrance/wither/blood). Rare - a handful of times per
+     * run at most - so a full rebuild costs nothing worth avoiding, unlike a brush stroke.
+     */
+    fun onDoorLayoutChanged() {
+        DoorZones.invalidate()
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
     }
 
     /**
@@ -241,22 +243,14 @@ object PaintSession {
         ChunkRebuild.markAll()
     }
 
-    /**
-     * Room-scoped like a palette, not world-scoped like blocks/types: while standing in a normal
-     * dungeon room the choice binds to that room; otherwise it becomes the new global default.
-     */
+    /** Always global: one active rooms preset governs every room, regardless of where the player
+     *  is standing when it's activated. */
     fun activateRoomPreset(name: String) {
         flush()
         PaintHistory.clear()
         PresetStores.rooms.load(name)
-
-        val room = scope?.takeUnless { it.isBoss }?.key
-        if (room != null) {
-            ApSettings.bindRoomPreset(room, PresetStores.rooms.activeName)
-        } else {
-            ApSettings.defaultRoomPreset = PresetStores.rooms.activeName
-            ApSettings.save()
-        }
+        ApSettings.defaultRoomPreset = PresetStores.rooms.activeName
+        ApSettings.save()
 
         PaintIndexBuilder.invalidateRooms()
         PaintIndexBuilder.refresh()

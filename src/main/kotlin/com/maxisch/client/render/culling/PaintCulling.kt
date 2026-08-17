@@ -1,6 +1,7 @@
 package com.maxisch.client.render.culling
 
 import com.maxisch.paint.PaintIndex
+import com.maxisch.paint.rule.DoorZones
 import net.minecraft.client.renderer.block.BlockAndTintGetter
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
@@ -31,17 +32,35 @@ object PaintCulling {
         state: BlockState,
         direction: Direction,
     ): Boolean {
-        if (PaintIndex.isEmpty) return false
+        if (PaintIndex.isEmpty && !DoorZones.opacityActive()) return false
 
         val neighbourPos = pos.relative(direction)
         val neighbourState = level.getBlockState(neighbourPos)
 
         val selfPaint = PaintIndex.paintAt(pos, state)
         val neighbourPaint = PaintIndex.paintAt(neighbourPos, neighbourState)
-        if (selfPaint == null && neighbourPaint == null) return false
+        val selfOpacity = DoorZones.opacityAt(pos, state.block)
+        val neighbourOpacity = DoorZones.opacityAt(neighbourPos, neighbourState.block)
+        if (selfPaint == null && neighbourPaint == null && selfOpacity == null && neighbourOpacity == null) {
+            return false
+        }
 
         // Vanilla already draws it; nothing to correct.
         if (Block.shouldRenderFace(state, neighbourState, direction)) return false
+
+        // A door rendering translucent has no donor to recompute shouldRenderFace against - its
+        // real state (and shape) never changed, only its alpha - so there is nothing to feed
+        // paintedFaceDecision. Vanilla culled this face because the door reads as fully opaque;
+        // now that it is not, the face has to be drawn - but only where exactly one side is
+        // opacity-affected. Two door blocks (or a door block and itself around a corner) sitting
+        // against each other are opacity-affected on *both* sides; forcing the shared face on both
+        // would double-draw the same coplanar quad and z-fight. That boundary is left to fall
+        // through to paintedFaceDecision below instead, which - with no donor on either side -
+        // reproduces vanilla's own answer: hide the seam, same as it always was.
+        if ((selfOpacity != null) xor (neighbourOpacity != null)) {
+            CullDiagnostics.record(true)
+            return true
+        }
 
         val keep = paintedFaceDecision(state, neighbourState, selfPaint, neighbourPaint, direction)
 

@@ -1,6 +1,7 @@
 package com.maxisch.client.gui.tab
 
 import com.maxisch.client.keybind.PaintKeys
+import com.maxisch.client.gui.screen.BlockPickerScreen
 import com.maxisch.client.gui.screen.ColorPickerScreen
 import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.gui.Theme
@@ -12,14 +13,18 @@ import com.maxisch.client.gui.widget.TextLineWidget
 import com.maxisch.client.gui.widget.ToggleSwitchWidget
 import com.maxisch.client.render.overlay.BlockHighlight
 import com.maxisch.client.render.overlay.PaintedOverlay
+import com.maxisch.dungeon.detect.DoorKind
 import com.maxisch.dungeon.detect.RoomTracker
 import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.ChunkRebuild
+import com.maxisch.paint.PaintIndexBuilder
 import com.maxisch.paint.PaintStorage
 import com.maxisch.paint.preset.PresetKind
 import com.maxisch.paint.preset.PresetStore
 import com.maxisch.paint.preset.PresetStores
+import com.maxisch.paint.rule.DoorZones
 import com.maxisch.paint.session.PaintBrush
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.Button
 import com.maxisch.client.gui.widget.ApEditBox
@@ -64,6 +69,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         const val SWATCH_W = 26
         const val SWATCH_H = 22
         const val OVERLAY_RADIUS_STEP = 2
+        const val DOOR_OPACITY_STEP = 15
         const val GREY = 0xFFA0A0A0.toInt()
 
         /** Marks a hex field whose text cannot be parsed. */
@@ -80,6 +86,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
     private val overlayPanel = add(CardWidget(Component.translatable("austrianpainter.settings.overlay")))
     private val dungeonPanel = add(CardWidget(Component.translatable("austrianpainter.settings.dungeon")))
     private val replaceFluidPanel = add(CardWidget(Component.translatable("austrianpainter.settings.replace_fluid")))
+    private val doorsPanel = add(CardWidget(Component.translatable("austrianpainter.settings.doors")))
     private val presetsPanel = add(CardWidget(Component.translatable("austrianpainter.settings.presets")))
 
     // ------------------------------------------------------------------ colours band
@@ -273,14 +280,12 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
             .build(),
     )
 
-    private val unbindBlocksButton = add(
-        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.unbind_room_blocks")) {
-            PaintStorage.scope?.let {
-                if (it.isBoss) ApSettings.bindBossPreset(it.key, null) else ApSettings.bindRoomPreset(it.key, null)
-            }
+    private val unbindBossButton = add(
+        ActButtonWidget.builder(Component.translatable("austrianpainter.settings.unbind_boss_preset")) {
+            PaintStorage.scope?.takeIf { it.isBoss }?.let { ApSettings.bindBossPreset(it.key, null) }
         }
             .width(1)
-            .tooltip(Tooltip.create(Component.translatable("austrianpainter.settings.unbind_room_blocks.desc")))
+            .tooltip(Tooltip.create(Component.translatable("austrianpainter.settings.unbind_boss_preset.desc")))
             .build(),
     )
 
@@ -348,6 +353,69 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         }
         lavaTintBox = ltb
         lavaTintSwatch = lts
+    }
+
+    // ------------------------------------------------------------------ doors panel
+
+    private data class DoorRow(
+        val kind: DoorKind,
+        val label: TextLineWidget,
+        val donorButton: ActButtonWidget,
+        val clearButton: ActButtonWidget,
+        val opacityStepper: StepperWidget,
+    )
+
+    /** Whatever changed a door's donor/opacity binding lands here - drops DoorZones' cache, rebuilds
+     *  the index that cache actually feeds, and re-bakes the chunks that show it. */
+    private fun refreshDoorZones() {
+        DoorZones.invalidate()
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
+    }
+
+    private val doorRows: List<DoorRow> = DoorKind.entries.map { kind ->
+        val label = add(TextLineWidget(0, 0, 0, GREY)).also {
+            it.message = Component.translatable("austrianpainter.settings.door.${kind.name.lowercase()}")
+        }
+        val donorButton = add(
+            ActButtonWidget.builder(Component.translatable("austrianpainter.settings.door_pick_donor")) {
+                Minecraft.getInstance().setScreenAndShow(
+                    BlockPickerScreen(screen) { block ->
+                        ApSettings.setDoorDonor(kind, block)
+                        refreshDoorZones()
+                        refresh()
+                    },
+                )
+            }.width(140).build(),
+        )
+        val clearButton = add(
+            ActButtonWidget.builder(Component.translatable("austrianpainter.settings.door_clear")) {
+                ApSettings.setDoorDonor(kind, null)
+                refreshDoorZones()
+                refresh()
+            }
+                .width(50)
+                .variant(ActButtonWidget.Variant.DANGER)
+                .tooltip(Tooltip.create(Component.translatable("austrianpainter.settings.door_clear.desc")))
+                .build(),
+        )
+        val opacityStepper = add(
+            StepperWidget(
+                0, 0, 0, 0,
+                value = ApSettings.doorOpacity(kind),
+                min = 0,
+                max = 255,
+                step = DOOR_OPACITY_STEP,
+                format = { Component.translatable("austrianpainter.settings.door_opacity_value", it) },
+            ) { value ->
+                ApSettings.setDoorOpacity(kind, value)
+                refreshDoorZones()
+                refresh()
+            },
+        ).also {
+            it.setTooltip(Tooltip.create(Component.translatable("austrianpainter.settings.door_opacity.desc")))
+        }
+        DoorRow(kind, label, donorButton, clearButton, opacityStepper)
     }
 
     private data class FluidTintRow(
@@ -512,7 +580,7 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
             dy += ROW
         }
         dy += ROW_GAP
-        for (button in listOf(rescanButton, unbindTypesButton, unbindBlocksButton, unbindPalettesButton)) {
+        for (button in listOf(rescanButton, unbindTypesButton, unbindBossButton, unbindPalettesButton)) {
             button.setRectangle(dungeonInner, ROW, dungeonX + PAD, dy)
             dy += ROW + 4
         }
@@ -568,8 +636,32 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         val fluidContentBottom = fy - ROW_GAP + PAD
         replaceFluidPanel.setRectangle(contentWidth, fluidContentBottom - fluidTop, x, fluidTop)
 
+        // -------------------------------------------------- doors panel, full width
+        val doorsTop = fluidContentBottom + GAP
+        var dry = doorsTop + CardWidget.HEADER_HEIGHT
+        val doorsInner = contentWidth - PAD * 2
+        val doorLabelWidth = doorRows.maxOf { Theme.textWidth(it.label.message.string).toInt() } + GAP
+        val doorButtonWidth = 140
+        val doorClearWidth = 50
+        val stepperX = x + PAD + doorLabelWidth + doorButtonWidth + GAP + doorClearWidth + GAP
+        val stepperWidth = (doorsInner - doorLabelWidth - doorButtonWidth - doorClearWidth - GAP * 3).coerceAtLeast(80)
+        for (row in doorRows) {
+            row.label.setRectangle(doorLabelWidth, TextLineWidget.HEIGHT, x + PAD, dry + 5)
+            row.donorButton.setRectangle(doorButtonWidth, ROW, x + PAD + doorLabelWidth + GAP, dry)
+            row.clearButton.setRectangle(
+                doorClearWidth,
+                ROW,
+                x + PAD + doorLabelWidth + GAP + doorButtonWidth + GAP,
+                dry,
+            )
+            row.opacityStepper.setRectangle(stepperWidth, ROW, stepperX, dry)
+            dry += ROW + ROW_GAP
+        }
+        val doorsContentBottom = dry - ROW_GAP + PAD
+        doorsPanel.setRectangle(contentWidth, doorsContentBottom - doorsTop, x, doorsTop)
+
         // -------------------------------------------------- presets strip, full width below
-        val presetsTop = fluidContentBottom + GAP
+        val presetsTop = doorsContentBottom + GAP
         var py = presetsTop + CardWidget.HEADER_HEIGHT
 
 
@@ -749,6 +841,17 @@ class SettingsTab(private val screen: PainterScreen) : ApTab("austrianpainter.ta
         lavaTintSwatch.color = ApSettings.lavaTintColor
         waterTintFlatToggle.checked = ApSettings.waterTintFlat
         lavaTintFlatToggle.checked = ApSettings.lavaTintFlat
+
+        for (row in doorRows) {
+            val donor = ApSettings.doorDonor(row.kind)
+            row.donorButton.message = if (donor == null) {
+                Component.translatable("austrianpainter.settings.door_pick_donor")
+            } else {
+                Component.literal(BuiltInRegistries.BLOCK.getKey(donor).path)
+            }
+            row.clearButton.active = donor != null
+            row.opacityStepper.value = ApSettings.doorOpacity(row.kind)
+        }
 
         blocksNameLine.message = Component.literal(PresetStores.blocks.activeName)
         typesNameLine.message = Component.literal(PresetStores.types.activeName)

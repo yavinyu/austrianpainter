@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.Block
 import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.rule.BossZones
 import com.maxisch.paint.rule.DeviceColumns
+import com.maxisch.paint.rule.DoorZones
 import com.maxisch.paint.rule.PaintRules
 import com.maxisch.paint.preset.PresetStores
 
@@ -51,7 +52,7 @@ internal object PaintIndexBuilder {
         // Cheap: the rules themselves are cached in DeviceColumns and only rebuilt when one of
         // them changes, so a brush stroke does not re-read palette files.
         val columns = DeviceColumns.activeColumns()
-        val zones = BossZones.activeZones()
+        val zones = BossZones.activeZones().merge(DoorZones.activeZones())
         val dimension = PaintSession.currentDimension()
         val absolute = dimension?.let { PaintRules.blocks.positionsIn(it) }
 
