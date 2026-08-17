@@ -4,6 +4,7 @@ import com.maxisch.dungeon.detect.RoomScanner
 import com.maxisch.dungeon.room.RoomScope
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
+import net.minecraft.network.chat.Component
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import com.maxisch.paint.settings.ApPaths
@@ -172,10 +173,19 @@ object PaintSession {
 
         val floor = Minecraft.getInstance().level?.minY ?: return
         val preset = PresetStores.rooms.active
+        val unpainted = mutableListOf<String>()
         for (room in RoomScanner.drainNewlyOriented()) {
-            if (preset.positionsFor(room.name)?.isEmpty() != false) continue
+            if (preset.positionsFor(room.name)?.isEmpty() != false) {
+                unpainted.add(room.name)
+                continue
+            }
             val (min, max) = room.footprint(floor) ?: continue
             ChunkRebuild.markRange(listOf(min, max))
+        }
+        if (unpainted.isNotEmpty() && ApSettings.notifyUnpaintedRooms) {
+            Minecraft.getInstance().player?.sendSystemMessage(
+                Component.translatable("austrianpainter.room.unpainted", unpainted.size, unpainted.joinToString(", ")),
+            )
         }
     }
 
