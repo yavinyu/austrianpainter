@@ -3,7 +3,6 @@ package com.maxisch.paint.settings
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.maxisch.dungeon.detect.DungeonLocation
 import com.maxisch.paint.settings.ApLog.LOGGER
 import net.minecraft.core.registries.BuiltInRegistries
 import java.nio.file.Path
@@ -238,9 +237,11 @@ object ApSettings {
 
     private val fluidOverridesByConfig = LinkedHashMap<String, FluidOverride>()
 
-    /** Null outside a boss fight, or inside one whose active preset has no override stored. */
-    private fun activeFluidOverride(): FluidOverride? =
-        if (DungeonLocation.inBoss) fluidOverridesByConfig[activeConfig] else null
+    /** Bound to whichever boss preset is currently active, not to physically standing in the arena -
+     *  fluid replacement is a pure rendering rule, not tied to a fixed in-arena position the way
+     *  device/zone rules are, so it applies wherever [activeConfig] does. Null when that config has
+     *  no override stored. */
+    private fun activeFluidOverride(): FluidOverride? = fluidOverridesByConfig[activeConfig]
 
     val effectiveWaterAsLava: Boolean get() = activeFluidOverride()?.waterAsLava ?: waterAsLava
     val effectiveLavaAsWater: Boolean get() = activeFluidOverride()?.lavaAsWater ?: lavaAsWater
