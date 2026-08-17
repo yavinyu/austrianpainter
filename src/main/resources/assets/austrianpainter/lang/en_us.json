@@ -114,8 +114,6 @@
   "austrianpainter.rule.type": "every %s -> %s",
   "austrianpainter.rule.donor": "%s - %s blocks",
 
-  "austrianpainter.brush.on": "on",
-  "austrianpainter.brush.off": "Brush off",
   "austrianpainter.brush.button_on": "Brush: on (r%s)",
   "austrianpainter.brush.button_off": "Brush: off",
   "austrianpainter.brush.size": "Size: %s",
@@ -124,8 +122,6 @@
   "austrianpainter.brush.disabled": "Brush is off - press %s to open the paint menu",
   "austrianpainter.brush.miss": "Not looking at a block",
   "austrianpainter.brush.no_donor": "no donor",
-  "austrianpainter.brush.unknown_block": "Unknown block: %s",
-  "austrianpainter.brush.status": "Brush %s, donor %s, radius %s",
   "austrianpainter.brush.radius": "Brush radius %s",
   "austrianpainter.brush.painted": "Painted %s blocks as %s",
   "austrianpainter.brush.erased": "Cleared %s painted blocks",
