@@ -325,6 +325,14 @@ object ApSettings {
     fun typePresetFor(worldKey: String): String =
         worldPresets[worldKey]?.types ?: defaultTypePreset
 
+    /** Null when the key was never bound, rather than the global default - the island-scoped
+     *  lookup in [com.maxisch.paint.PaintSession] needs to tell "this island has no binding" from
+     *  "this island is bound to the default", so it can fall back to the server-wide binding
+     *  before the default. */
+    fun blockPresetOrNull(worldKey: String): String? = worldPresets[worldKey]?.blocks
+
+    fun typePresetOrNull(worldKey: String): String? = worldPresets[worldKey]?.types
+
     fun bindBlocks(worldKey: String, preset: String) {
         binding(worldKey).blocks = preset
         save()

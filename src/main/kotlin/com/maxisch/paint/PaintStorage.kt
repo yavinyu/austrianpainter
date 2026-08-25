@@ -19,6 +19,9 @@ object PaintStorage {
     /** Identifies the world/server the bindings belong to; null while not in a world. */
     val worldKey: String? get() = PaintSession.worldKey
 
+    /** The narrower key an island-scoped binding is written under; null off Skyblock. */
+    val islandKey: String? get() = PaintSession.islandKey
+
     /** The dungeon room the player is standing in, if any. */
     val scope: RoomScope? get() = PaintSession.scope
 
@@ -37,6 +40,9 @@ object PaintStorage {
 
     /** The dungeon floor was identified or lost; room and boss presets follow it. */
     fun onDungeonFloorChanged(floor: Int?) = PaintSession.onDungeonFloorChanged(floor)
+
+    /** The Skyblock island changed; block and type preset bindings follow it. */
+    fun onIslandChanged() = PaintSession.onIslandChanged()
 
     /** A room finished scanning, so its paint can now be projected into the index. */
     fun onRoomLayoutChanged() = PaintSession.onRoomLayoutChanged()

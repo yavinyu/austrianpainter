@@ -1,6 +1,7 @@
 package com.maxisch.paint
 
 import com.maxisch.dungeon.detect.RoomScanner
+import com.maxisch.dungeon.detect.SkyblockLocation
 import com.maxisch.dungeon.room.RoomScope
 import net.minecraft.client.Minecraft
 import net.minecraft.core.BlockPos
@@ -31,6 +32,15 @@ object PaintSession {
         private set
 
     /**
+     * The narrower key a Hypixel island binds to, `"<worldKey>@<island>"`, or null off Skyblock and
+     * while the island is still unknown. [worldKey] stays the server's identity - it is what every
+     * other package and the GUI read - and this sits beside it so a binding can be island-scoped
+     * without changing what "world" means anywhere else.
+     */
+    var islandKey: String? = null
+        private set
+
+    /**
      * The dungeon room the player is standing in, if any. While it is set every edit goes to that
      * room's slice in room-relative coordinates instead of to the dimension's absolute one.
      */
@@ -45,12 +55,15 @@ object PaintSession {
     fun onJoinWorld() {
         val key = resolveWorldKey()
         worldKey = key
+        // Detection has not run yet on a fresh join, so this starts null and the island edge in
+        // RoomTracker swaps the presets a moment later if it resolves to something.
+        islandKey = resolveIslandKey()
         // A server switch drops whatever room was in scope; the tracker rediscovers it.
         scope = null
         PaintHistory.clear()
 
-        PresetStores.blocks.load(ApSettings.blockPresetFor(key))
-        PresetStores.types.load(ApSettings.typePresetFor(key))
+        PresetStores.blocks.load(wantedBlocksPreset())
+        PresetStores.types.load(wantedTypesPreset())
         // Unconditionally, even though a room may swap it again later: every scanned room is
         // projected into the index from the moment it orients, so the preset behind them has to be
         // in memory before the player walks anywhere. Bosses are the opposite - see [onScopeChanged].
@@ -62,6 +75,7 @@ object PaintSession {
     fun onLeaveWorld() {
         flush()
         worldKey = null
+        islandKey = null
         scope = null
         PaintHistory.clear()
         PaintIndexBuilder.invalidateRooms()
@@ -81,7 +95,7 @@ object PaintSession {
         PaintHistory.clear()
 
         val wanted = next?.key?.let { ApSettings.roomTypePresetFor(it) }
-            ?: worldKey?.let { ApSettings.typePresetFor(it) }
+            ?: wantedTypesPreset()
         val presetChanged = wanted != null && wanted != PresetStores.types.activeName
         if (presetChanged) PresetStores.types.load(wanted)
 
@@ -124,6 +138,41 @@ object PaintSession {
         // re-baked, and walking into the arena happens once a run.
         val bossChanged = previous?.isBoss == true || next?.isBoss == true
         if (presetChanged || roomChanged || bossChanged) ChunkRebuild.markAll()
+    }
+
+    /**
+     * The player moved to another Skyblock island. Block and type presets bind per island when the
+     * island is known, so this is the same shape as [onScopeChanged]: the binding key changes, and
+     * whatever the new key resolves to has to be on the stores before anything renders.
+     *
+     * History is cleared even when neither preset actually changes - the recorded coordinates
+     * belong to the island just left, and replaying them here would paint the wrong world.
+     */
+    fun onIslandChanged() {
+        val next = resolveIslandKey()
+        if (next == islandKey) return
+
+        flush()
+        islandKey = next
+        PaintHistory.clear()
+
+        val wantedBlocks = wantedBlocksPreset()
+        val wantedTypes = wantedTypesPreset()
+        var changed = false
+        if (wantedBlocks != PresetStores.blocks.activeName) {
+            PresetStores.blocks.load(wantedBlocks)
+            changed = true
+        }
+        // A room in scope carries its own type binding, which outranks the island's - leave it be.
+        if (scope == null && wantedTypes != PresetStores.types.activeName) {
+            PresetStores.types.load(wantedTypes)
+            changed = true
+        }
+        if (!changed) return
+
+        PaintIndexBuilder.invalidateRooms()
+        PaintIndexBuilder.refresh()
+        ChunkRebuild.markAll()
     }
 
     /**
@@ -238,7 +287,7 @@ object PaintSession {
         flush()
         PaintHistory.clear()
         PresetStores.blocks.load(name)
-        worldKey?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
+        bindingKey()?.let { ApSettings.bindBlocks(it, PresetStores.blocks.activeName) }
         PaintIndexBuilder.refresh()
         ChunkRebuild.markAll()
     }
@@ -290,7 +339,7 @@ object PaintSession {
         if (room != null) {
             ApSettings.bindRoomTypes(room, PresetStores.types.activeName)
         } else {
-            worldKey?.let { ApSettings.bindTypes(it, PresetStores.types.activeName) }
+            bindingKey()?.let { ApSettings.bindTypes(it, PresetStores.types.activeName) }
         }
 
         PaintIndexBuilder.refresh()
@@ -326,6 +375,31 @@ object PaintSession {
     // ---------------------------------------------------------------- world identity
 
     internal fun currentDimension(): ResourceKey<Level>? = Minecraft.getInstance().level?.dimension()
+
+    /**
+     * Where a world-scoped binding is written: the island when one is known, the server otherwise.
+     * Reads stay a fallback chain (see [wantedBlocksPreset]), so binding an island never hides the
+     * server-wide binding from the islands that have none of their own.
+     */
+    private fun bindingKey(): String? = islandKey ?: worldKey
+
+    private fun resolveIslandKey(): String? {
+        val world = worldKey ?: return null
+        val island = SkyblockLocation.bindingSlug() ?: return null
+        return "$world@$island"
+    }
+
+    /** Island binding, then server binding, then the global default. */
+    private fun wantedBlocksPreset(): String =
+        islandKey?.let { ApSettings.blockPresetOrNull(it) }
+            ?: worldKey?.let { ApSettings.blockPresetFor(it) }
+            ?: ApSettings.defaultBlockPreset
+
+    /** Island binding, then server binding, then the global default. */
+    private fun wantedTypesPreset(): String =
+        islandKey?.let { ApSettings.typePresetOrNull(it) }
+            ?: worldKey?.let { ApSettings.typePresetFor(it) }
+            ?: ApSettings.defaultTypePreset
 
     private fun resolveWorldKey(): String {
         val mc = Minecraft.getInstance()
