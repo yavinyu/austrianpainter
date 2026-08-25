@@ -25,6 +25,9 @@ object RoomTracker {
     /** Edge-detects the floor, which decides which boss preset and room presets are loaded. */
     private var lastFloor: Int? = null
 
+    /** Edge-detects the island, which decides which block and type presets are bound. */
+    private var lastIsland: String? = null
+
     /** Last [RoomScanner.layoutVersion] the paint side was told about. */
     private var lastLayout = RoomScanner.layoutVersion
 
@@ -36,6 +39,14 @@ object RoomTracker {
 
     fun tick() {
         DungeonLocation.tick()
+        // After DungeonLocation: the Skyblock and dungeon flags it reads are this tick's.
+        SkyblockLocation.tick()
+
+        val island = SkyblockLocation.bindingSlug()
+        if (island != lastIsland) {
+            lastIsland = island
+            PaintStorage.onIslandChanged()
+        }
 
         if (DungeonLocation.inDungeon) {
             wasInDungeon = true
@@ -96,6 +107,7 @@ object RoomTracker {
      */
     fun reset() {
         DungeonLocation.reset()
+        SkyblockLocation.reset()
         RoomScanner.reset()
         DoorScanner.reset()
         wasInDungeon = false
@@ -103,6 +115,7 @@ object RoomTracker {
         deviceActive = false
         zoneActive = false
         lastFloor = null
+        lastIsland = null
         // Deliberately not re-synced: RoomScanner.reset() has bumped the version, so the next tick
         // fires the layout hook and drops projections belonging to the run that just ended.
 
