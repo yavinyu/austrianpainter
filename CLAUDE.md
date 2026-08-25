@@ -64,6 +64,12 @@ under `config/ap/` (`run/config/ap` in the dev client); see the "Config layout" 
 README.md for the exact file layout and ruleset key syntax (`*all`, `*unpainted`, `@` paint-state
 suffixes, `palette:` prefix).
 
+**Island scoping** (`dungeon/detect/SkyblockLocation`, `SkyblockIsland`): block and block-type
+preset bindings are keyed `"<server>@<island>"`, read off the tab list's `Area: <island>` entry
+(sidebar as fallback) and re-read continuously — an island changes without a reconnect, unlike the
+dungeon floor, which is latched per server. Lookups fall back island key -> server key -> default,
+so pre-island bindings keep working untouched.
+
 **Dungeon scoping** (`dungeon/`): rooms are identified by hashing a column of blocks and looking it
 up in a room list served by NoammAddons (`detect/RoomScanner`, `DoorScanner`, `WorldProbe`), then
 oriented by finding a marker block Hypixel leaves on one roof corner. Paint is stored relative to
@@ -102,5 +108,5 @@ src/main/kotlin/com/maxisch/
   paint/             PaintStorage facade, PaintIndex, preset codec, history, settings, paths
   paint/session/     transient authoring state: brush, area, selection, area scan
   paint/rule/        AreaRule, BossZones, DeviceColumns, DoorZones, ColumnRules
-  dungeon/           room/door scanning, room data store, coordinate transform
+  dungeon/           room/door scanning, island detection, room data store, coordinate transform
 ```

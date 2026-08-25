@@ -33,8 +33,8 @@ internal class ZoneBounds(
     fun corners(): Pair<BlockPos, BlockPos> = BlockPos(minX, minY, minZ) to BlockPos(maxX, maxY, maxZ)
 }
 
-/** The boss-room zones a player can aim a donor/palette at. Most are one box; [BossZone.CRUSHER]
- *  and [BossZone.CRUSHER_P1] are several, one per crusher's full travel range, since a single
+/** The boss-room zones a player can aim a donor/palette at. Most are one box; the three crusher
+ *  zones are several, one per crusher's full travel range, since a single
  *  moving block can visit any of them - matched live the same way one zone's own box already
  *  keeps up with movement inside it.
  *
@@ -48,8 +48,8 @@ enum class BossZone(val key: String, val p1: Boolean, internal val bounds: List<
     S2("s2", false, listOf(ZoneBounds(58, 133, 143, 62, 136, 143))),
     S3("s3", false, listOf(ZoneBounds(-3, 120, 75, -3, 124, 79))),
     S4("s4", false, listOf(ZoneBounds(64, 126, 50, 68, 130, 50))),
-    CRUSHER(
-        "crusher",
+    CRUSHER_S3(
+        "s3_crusher",
         false,
         listOf(
             ZoneBounds(-3, 107, 95, 19, 108, 97),
@@ -59,6 +59,14 @@ enum class BossZone(val key: String, val p1: Boolean, internal val bounds: List<
             ZoneBounds(13, 117, 82, 15, 127, 84),
             ZoneBounds(1, 117, 70, 3, 127, 72),
             ZoneBounds(13, 117, 70, 15, 127, 72),
+        ),
+    ),
+    CRUSHER_S2(
+        "s2_crusher",
+        false,
+        listOf(
+            ZoneBounds(64, 109, 121, 66, 112, 125),
+            ZoneBounds(59, 109, 121, 61, 112, 125),
         ),
     ),
     CRUSHER_P1(
@@ -107,7 +115,8 @@ object BossZones {
         ZoneSourceRule(BossZone.S3, Blocks.BLUE_TERRACOTTA),
         ZoneSourceRule(BossZone.S4, Blocks.EMERALD_BLOCK),
         ZoneSourceRule(BossZone.S4, Blocks.BLUE_TERRACOTTA),
-        ZoneSourceRule(BossZone.CRUSHER, Blocks.POLISHED_GRANITE),
+        ZoneSourceRule(BossZone.CRUSHER_S3, Blocks.POLISHED_GRANITE),
+        ZoneSourceRule(BossZone.CRUSHER_S2, Blocks.POLISHED_GRANITE),
         ZoneSourceRule(BossZone.CRUSHER_P1, Blocks.POLISHED_GRANITE),
     )
 
@@ -203,7 +212,7 @@ object BossZones {
         }
 }
 
-/** One zone's bounds (one box for most zones, seven for [BossZone.CRUSHER]) plus what each of its
+/** One zone's bounds (one box for most zones, seven for [BossZone.CRUSHER_S3]) plus what each of its
  *  (block, lit) sources becomes. */
 internal class ZoneEntry(val bounds: List<ZoneBounds>, val targets: Map<ZoneKey, ColumnTarget>)
 

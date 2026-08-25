@@ -3,6 +3,8 @@ package com.maxisch.client
 import com.maxisch.client.gui.screen.PainterScreen
 import com.maxisch.client.render.culling.CullDiagnostics
 import com.maxisch.dungeon.detect.DungeonLocation
+import com.maxisch.dungeon.detect.SkyblockIsland
+import com.maxisch.dungeon.detect.SkyblockLocation
 import com.maxisch.dungeon.room.RoomDataStore
 import com.maxisch.paint.settings.ApSettings
 import com.maxisch.paint.PaintStorage
@@ -57,6 +59,22 @@ object PaintCommands {
                                 ClientCommands.literal("raw").executes { context ->
                                     dumpRawSidebar(context.source)
                                 },
+                            ),
+                    )
+                    .then(
+                        ClientCommands.literal("island")
+                            .executes { context -> islandStatus(context.source) }
+                            .then(
+                                ClientCommands.literal("raw").executes { context ->
+                                    dumpRawTabList(context.source)
+                                },
+                            )
+                            .then(
+                                ClientCommands.argument("island", StringArgumentType.greedyString())
+                                    .suggests { _, builder ->
+                                        SharedSuggestionProvider.suggest(ISLAND_SUGGESTIONS, builder)
+                                    }
+                                    .executes { context -> forceIsland(context) },
                             ),
                     )
                     .then(
@@ -117,6 +135,9 @@ object PaintCommands {
 
     private val FORCE_SUGGESTIONS =
         listOf("off") + (1..7).map { "F$it" } + (1..7).map { "M$it" }
+
+    private val ISLAND_SUGGESTIONS =
+        listOf("off") + SkyblockIsland.entries.map { it.key }
 
     /**
      * Lets a server that does not send Hypixel's sidebar - a test or simulation server - be treated
@@ -206,6 +227,67 @@ object PaintCommands {
             "${scope.origin.x}, ${scope.origin.z}",
             scope.rotation,
             PaintStorage.positionsByDonor().values.sum(),
+        )
+    }
+
+    /** The island counterpart to [forceDungeon], and session-only for the same reason: it must not
+     *  survive into a real lobby and bind presets to an island the player is not on. */
+    private fun forceIsland(context: CommandContext<FabricClientCommandSource>): Int {
+        val raw = StringArgumentType.getString(context, "island")
+
+        if (raw.equals("off", ignoreCase = true)) {
+            SkyblockLocation.force(null)
+            return feedback(context.source, "austrianpainter.island.force_off")
+        }
+
+        val island = SkyblockIsland.byKeyOrArea(raw)
+        if (island == null) {
+            context.source.sendError(Component.translatable("austrianpainter.island.force_bad", raw))
+            return 0
+        }
+
+        SkyblockLocation.force(island)
+        return feedback(context.source, "austrianpainter.island.force", island.areaName)
+    }
+
+    /** Dumps the tab-list entries the island is read from, to diagnose a detection failure the way
+     *  `/ap room raw` already does for the sidebar. */
+    private fun dumpRawTabList(source: FabricClientCommandSource): Int {
+        for (line in SkyblockLocation.debugTabList()) {
+            source.sendFeedback(Component.literal(line))
+        }
+        return 1
+    }
+
+    /** Diagnostics for the island scope: which island was detected, and which key the block and
+     *  type bindings are actually being written under. */
+    private fun islandStatus(source: FabricClientCommandSource): Int {
+        if (SkyblockLocation.forced) {
+            source.sendFeedback(
+                Component.translatable(
+                    "austrianpainter.island.forced",
+                    SkyblockLocation.forcedIsland?.areaName ?: "?",
+                ).withStyle { style ->
+                    style.withUnderlined(true)
+                        .withClickEvent(ClickEvent.SuggestCommand("/ap island off"))
+                },
+            )
+        }
+
+        val area = SkyblockLocation.area
+            ?: return feedback(source, "austrianpainter.island.unknown")
+
+        feedback(
+            source,
+            "austrianpainter.island.detected",
+            area,
+            SkyblockLocation.island?.key ?: "?",
+        )
+
+        return feedback(
+            source,
+            "austrianpainter.island.binding",
+            PaintStorage.islandKey ?: PaintStorage.worldKey ?: "?",
         )
     }
 
