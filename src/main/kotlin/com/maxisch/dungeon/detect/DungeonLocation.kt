@@ -181,8 +181,10 @@ object DungeonLocation {
         latched = false
     }
 
-    /** Strips section-sign formatting and the invisible padding Hypixel pads sidebar lines with. */
-    private fun clean(raw: String): String = buildString(raw.length) {
+    /** Strips section-sign formatting and the invisible padding Hypixel pads sidebar lines with.
+     *  Internal rather than private so [SkyblockLocation] can hand the tab list through the same
+     *  cleaner instead of carrying a copy. */
+    internal fun clean(raw: String): String = buildString(raw.length) {
         var index = 0
         while (index < raw.length) {
             val char = raw[index]
