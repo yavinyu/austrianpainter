@@ -18,6 +18,7 @@ import com.maxisch.paint.rule.BossZones
 import com.maxisch.paint.rule.DeviceArray
 import com.maxisch.paint.rule.DeviceColumns
 import com.maxisch.paint.rule.DeviceSource
+import com.maxisch.paint.rule.DoorZones
 import com.maxisch.paint.preset.PresetCodec
 import com.maxisch.paint.preset.PresetKind
 import com.maxisch.paint.preset.PresetStores
@@ -324,6 +325,14 @@ object ApSettings {
     fun typePresetFor(worldKey: String): String =
         worldPresets[worldKey]?.types ?: defaultTypePreset
 
+    /** Null when the key was never bound, rather than the global default - the island-scoped
+     *  lookup in [com.maxisch.paint.PaintSession] needs to tell "this island has no binding" from
+     *  "this island is bound to the default", so it can fall back to the server-wide binding
+     *  before the default. */
+    fun blockPresetOrNull(worldKey: String): String? = worldPresets[worldKey]?.blocks
+
+    fun typePresetOrNull(worldKey: String): String? = worldPresets[worldKey]?.types
+
     fun bindBlocks(worldKey: String, preset: String) {
         binding(worldKey).blocks = preset
         save()
@@ -426,6 +435,31 @@ object ApSettings {
         return bucket
     }
 
+    /** Zone keys renamed since a settings file was last written, old prefix to new. The trailing
+     *  dot is load-bearing: `crusher_p1.` is a different zone and must not be caught by
+     *  `crusher.`. */
+    private val ZONE_KEY_MIGRATIONS = listOf("crusher." to "s3_crusher.")
+
+    /** Rewrites a rule bucket's keys through [ZONE_KEY_MIGRATIONS], in place of losing every rule
+     *  saved under a zone's old [BossZone.key]. A key already written in the new form wins - the
+     *  migration only fills in what is not there. */
+    private fun migrateZoneKeys(bucket: LinkedHashMap<String, AreaTarget?>): LinkedHashMap<String, AreaTarget?> {
+        val migrated = LinkedHashMap<String, AreaTarget?>()
+        for ((key, target) in bucket) {
+            val renamed = migratedZoneKey(key)
+            if (renamed != key && bucket.containsKey(renamed)) continue
+            migrated[renamed] = target
+        }
+        return migrated
+    }
+
+    /** The rewrite itself, split out from [migrateZoneKeys] so it can be tested without a client. */
+    internal fun migratedZoneKey(key: String): String =
+        ZONE_KEY_MIGRATIONS
+            .firstOrNull { (from, _) -> key.startsWith(from) }
+            ?.let { (from, to) -> to + key.removePrefix(from) }
+            ?: key
+
     fun load() {
         ApPaths.ensureDirectories()
 
@@ -519,12 +553,12 @@ object ApSettings {
                 val byConfig = zones.getAsJsonObject("rulesByConfig")
                 if (byConfig != null) {
                     byConfig.entrySet().forEach { (config, rules) ->
-                        zoneRulesByConfig[config] = parseRuleBucket(rules.asJsonObject, path)
+                        zoneRulesByConfig[config] = migrateZoneKeys(parseRuleBucket(rules.asJsonObject, path))
                     }
                 } else {
                     // Same migration as deviceColumns above.
                     zones.getAsJsonObject("rules")?.let {
-                        zoneRulesByConfig[DEFAULT_PRESET] = parseRuleBucket(it, path)
+                        zoneRulesByConfig[DEFAULT_PRESET] = migrateZoneKeys(parseRuleBucket(it, path))
                     }
                 }
             }
@@ -569,6 +603,11 @@ object ApSettings {
                     bound.get("types")?.asString ?: defaultTypePreset,
                 )
             }
+
+            // Every cached rule layer was built from the values just replaced.
+            DeviceColumns.invalidate()
+            BossZones.invalidate()
+            DoorZones.invalidate()
         }.onFailure { LOGGER.error("Could not read {}", path, it) }
     }
 
@@ -689,14 +728,19 @@ object ApSettings {
             for (id in recentDonors) recent.add(id)
             add("recentDonors", recent)
 
+            // Donor and opacity are independent axes (see [DoorZones]), so each is written on its
+            // own: gating the whole entry on a donor lost an opacity-only door entirely, and
+            // erased a door's opacity the moment its donor was cleared.
             val doors = JsonObject()
             for (kind in DoorKind.entries) {
-                val donor = doorDonors[kind] ?: continue
+                val donor = doorDonors[kind]
+                val opacity = doorOpacities[kind]
+                if (donor == null && opacity == null) continue
                 doors.add(
                     kind.name,
                     JsonObject().apply {
-                        addProperty("donor", BuiltInRegistries.BLOCK.getKey(donor).toString())
-                        addProperty("opacity", doorOpacity(kind))
+                        donor?.let { addProperty("donor", BuiltInRegistries.BLOCK.getKey(it).toString()) }
+                        opacity?.let { addProperty("opacity", it) }
                     },
                 )
             }

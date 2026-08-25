@@ -26,6 +26,10 @@ Painted blocks also take the donor's step sound, break sound and destroy particl
 donor whose model draws nothing — barrier, structure void, light — renders the block invisible while
 its collision and selection outline stay put.
 
+On top of those, four layers paint themselves rather than being painted block by block: the
+**boss room** phases P1/P2/P3, the Catacombs **doors**, and **Replace Fluid**. Each has its own
+section below.
+
 ---
 
 ## Requirements
@@ -36,8 +40,10 @@ its collision and selection outline stay put.
 | Fabric Loader | 0.19.3 or newer |
 | Fabric API | 0.150.0+26.1.2 |
 | fabric-language-kotlin | 1.13.13+kotlin.2.4.10 |
-| **YetAnotherConfigLib (YACL)** | 3.9.6+26.1-fabric — **required**, the settings screen is built on it |
-| ModMenu | Optional. Adds the config button to the mod list |
+
+Nothing else. Settings live on the paint menu's own Settings tab, so there is no config-library
+dependency and no mod-list entry point. NanoVG, which the menu draws through, is bundled inside the
+jar.
 
 Client-side only. Drop the jar and its dependencies in `mods/`.
 
@@ -70,7 +76,7 @@ the old one.
 
 ## HUD
 
-A toggleable readout in the corner (**Settings → Show brush readout**, or `/paintbrush hud`):
+A toggleable readout in the corner (**Settings → Show brush readout**, or `/ap hud`):
 
 - **Room** — the dungeon room or boss currently in scope.
 - **Looking at** — the real block under your crosshair, never the painted one (**Settings → Show
@@ -81,31 +87,37 @@ A toggleable readout in the corner (**Settings → Show brush readout**, or `/pa
 
 ---
 
-## `/paintbrush`
+## `/ap`
 
-A client command. Nothing here reaches the server.
+A client command. Nothing here reaches the server. Everything it does is also on the paint menu —
+the command exists for the things worth having without opening a screen, and for the diagnostics
+that have nowhere else to print.
 
 | Subcommand | Effect |
 |---|---|
-| *(none)* | Brush status: on/off, donor, radius |
-| `on` / `off` / `toggle` | Arm or disarm the brush |
-| `donor <block>` | Set the donor block, and arm the brush |
+| *(none)* | Open the paint menu, same as `P` |
 | `radius <1-5>` | Brush size; a radius of `r` paints a cube of side `2r-1` |
 | `undo` / `redo` | Same as the undo and redo keys |
+| `sound` | Toggle painted sounds |
+| `keys` | Toggle every Austrian Painter keybind at once |
+| `hud` | Toggle the HUD readout |
 | `room` | Dungeon diagnostics: known room cores, floor, scope key, origin, rotation, painted count |
-| `device [on\|off\|nearest\|probe]` | F7/M7 device-pillar colours: status, arm/disarm, nearest column to you, or probe the block you are looking at |
-| `zones [on\|off\|toggle]` | F7/M7 boss zone paint (pillars, s1-s4): status, or arm/disarm the whole layer |
-| `cull` / `cull reset` | Face-culling counters, for diagnosing a hole in a wall |
+| `room raw` | Dump the sidebar the floor is read from |
 | `dungeon <off\|F1-F7\|M1-M7> [boss]` | Pretend to be on that floor. Session only — see below |
-| `sound <true\|false>` | Painted sounds on or off |
-| `keys [on\|off\|toggle]` | Enable or disable every Austrian Painter keybind at once |
-| `hud [on\|off\|toggle]` | Show or hide the HUD readout |
+| `island` | Island diagnostics: detected island, raw area name, and the key presets bind under |
+| `island raw` | Dump the tab-list entries the island is read from |
+| `island <off\|name>` | Pretend to be on that island. Session only — see below |
+| `cull` / `cull reset` | Face-culling counters, for diagnosing a hole in a wall |
+
+The three `<off\|…>` forms and the two `raw` dumps are the diagnostic half: detection is invisible
+until it fails, and a chat line beats reading a log.
 
 ---
 
 ## The paint menu
 
-One screen, five tabs, reached with `P`.
+One screen, six tabs, reached with `P`: **Brush**, **Area**, **Dungeon**, **Presets**, **History**,
+**Settings**.
 
 **Brush** — choose a donor, arm the brush, set the size and the mode, then `Apply` for the block
 you are looking at. The list underneath is everything painted in the current scope, grouped by
@@ -174,17 +186,31 @@ highlighted rows match, and **Unpaint area** strips it off the whole box. Both a
 The selection is drawn in-world as a coloured box (colours are configurable). The ceiling is
 **2,000,000 blocks**; past that everything is refused rather than stalling the client.
 
-**Palette** — add and remove donors, and scroll a row to change its weight (hold shift for ±10).
-Weights are relative, so each row shows the share it works out to.
+**Dungeon** — every F7/M7 repaint mechanic, laid out as Sadan's three real boss phases rather than
+as the implementation's own groupings: **P1 · Conveyer**, **P2 · Pillars**, **P3 · Devices**. Three
+lists side by side, each with its own Live toggle and its own Reset, and one shared editor row at
+the bottom acting on whichever list was clicked last. See *Boss room automation* below for what
+each phase covers. Edits batch into a single rebuild when the tab is closed rather than one per
+click.
 
-**Presets** — one folder manager for every kind. New, Duplicate, Rename, Delete, Activate. The pane
-on the right shows what is actually inside the selected preset, so a ruleset or palette can be read
+**Presets** — one folder manager for every kind. New, Duplicate, Rename, Delete, Activate. Palette
+weights are edited here too rather than on a tab of their own — a palette is just another preset
+kind: select the active palette, add or remove donors, and scroll a row to change its weight (hold
+shift for ±10). Weights are relative, so each row shows the share it works out to. The pane on the
+right shows what is actually inside the selected preset, so a ruleset or palette can be read
 without opening its JSON. **Copy** puts the active preset on the clipboard and **Paste** creates a
 new one from whatever is on it — a paste always makes a new preset from the name box, never
 overwrites. Every refusal says why rather than doing nothing.
 
 **History** — the undo stack, newest first, with the change that Undo will take called out. Until
 this existed the only signal was a number on the footer button.
+
+**Settings** — the only settings surface there is; there is no separate config screen. Seven cards:
+**Area selection** (selection outline/fill/preview colours), **General** (brush size, painted
+sounds, HUD readout, usage hints, looked-at block, keybinds master switch), **Painted block
+outlines** (the overlay's radius and colour), **Dungeons** (room-scoped paint, unpainted-room
+notices, re-scan, and the unbind buttons for a room's type/palette binding and an arena's boss
+preset), **Replace Fluid**, **Doors**, and **Presets** (the manage-presets shortcuts).
 
 Results appear on the status line above the footer, not in chat — chat is unreadable while a screen
 is open. Actions triggered by a keybind, where no screen is up, still report to chat.
@@ -194,7 +220,7 @@ is open. Actions triggered by a keybind, where no screen is up, still report to 
 ## Undo and redo
 
 The last **20** changes can be undone, with the `Z` key, the footer button, the History tab, or
-`/paintbrush undo`. Redo is the same in reverse: `Y`, the footer button, or `/paintbrush redo`.
+`/ap undo`. Redo is the same in reverse: `Y`, the footer button, or `/ap redo`.
 Making any *new* change drops the redo stack — once the timeline forks there is no honest way to
 replay the branch that was abandoned.
 
@@ -204,8 +230,38 @@ Two deliberate limits:
   lie about everything older — so the whole history is cleared and the status line says so. A
   full-size area apply is intentionally outside what can be undone.
 - The history is cleared whenever the scope changes: joining a world, leaving one, switching a
-  preset, or walking through a Catacombs doorway. Recorded coordinates belong to one slice's
-  coordinate space and cannot be replayed into another.
+  preset, changing Skyblock island, or walking through a Catacombs doorway. Recorded coordinates
+  belong to one slice's coordinate space and cannot be replayed into another.
+
+---
+
+## Skyblock islands
+
+Block and block-type presets bind **per island**, not per server. Walk from the Hub to the Dwarven
+Mines and the preset bound to Dwarven Mines loads on arrival; walk back and the Hub's returns. No
+relogin is involved — unlike the dungeon floor, the island is re-read continuously, because it
+changes without a new server instance.
+
+The island is read off the client's own tab list, where Hypixel publishes it as an `Area: <island>`
+entry. Nothing is sent to the server, and no packets are intercepted — the same rule the dungeon
+detection follows. With no `Area:` entry to read, the sidebar is checked for a line naming an island
+outright, and a detected Catacombs floor answers for itself.
+
+Bindings fall back rather than replace: an island you have never bound a preset on uses whatever the
+server as a whole is bound to, and that in turn falls back to the default preset. So nothing changes
+until you actually bind something on an island, and an existing per-server binding keeps working
+exactly as it did.
+
+An island this mod has never heard of — one Hypixel added after this build — still binds under its
+own key, taken from the raw area name, rather than sharing the server-wide one. `/ap island`
+shows both the raw name and the key in use.
+
+Undo history is cleared on an island change, for the same reason a Catacombs doorway clears it: the
+recorded coordinates belong to the island just left.
+
+To test per-island bindings off Hypixel — on a server that sends no tab list — use
+`/ap island <name>`. It is session-only and never persisted, exactly like
+`/ap dungeon`.
 
 ---
 
@@ -239,33 +295,76 @@ drops the `The Catacombs (M7)` line partway through some boss fights, and readin
 dungeon" used to unload the boss paint mid-fight and throw the scanned layout away with it. Only a
 join, a dimension change, leaving Skyblock, or **Settings → Dungeons → Re-scan dungeon** re-arms the
 detection — nothing the sidebar prints does. Whether the floor is still being read or already held
-shows in `/paintbrush room`.
+shows in `/ap room`.
 
-The HUD shows the room in scope. `/paintbrush room` shows the rest. If a room is not recognised, use
+The HUD shows the room in scope. `/ap room` shows the rest. If a room is not recognised, use
 **Settings → Dungeons → Re-scan dungeon**.
 
 To author boss-room paint off Hypixel — on a test server that sends no sidebar — use
-`/paintbrush dungeon F7 boss`. It is session-only and never persisted, and the HUD turns orange
+`/ap dungeon F7 boss`. It is session-only and never persisted, and the HUD turns orange
 while it is on so it cannot be mistaken for real detection.
 
 ---
 
 ## Boss room automation
 
-Two independent layers repaint fixed points inside the F7/M7 Sadan boss room without touching the
-world — both evaluated live at model-bake time, so they keep working while their blocks move, and
-neither needs a room scan (boss rooms sit at fixed coordinates). Both gate themselves to floor 7
-(Normal or Master Mode share the same room), are off by default, and dirty only their own fixed
-footprint when toggled rather than the whole loaded view.
+Three independent layers repaint fixed points inside the F7/M7 Sadan boss room without touching the
+world. All of them are evaluated live at model-bake time, matched on the block that is actually
+there rather than on a coordinate, so they keep working while their blocks move. None needs a room
+scan — boss rooms sit at fixed coordinates. All three gate themselves to floor 7 (Normal and Master
+Mode share the room), are off by default, and dirty only their own fixed footprint when toggled
+rather than the whole loaded view.
 
-**Device columns** — repaints the phase-2 diorite/polished-diorite pillars the colour of the array
-(green/yellow/purple/red) they belong to, so you can tell them apart at a glance. Configure per
-(array, block) rule from **Settings → F7 device colours...**, or with `/paintbrush device`.
+They are configured on the paint menu's **Dungeon** tab, one column per phase, each with its own
+Live toggle and its own Reset. Every rule binds to the **active boss preset**, so a different preset
+can carry a different colour scheme.
 
-**Boss zone paint** — repaints five fixed panels: the moving pillar blocks (coal block, player head)
-and four swap panels — `s1` sea lantern/obsidian, `s2` redstone lamp lit/unlit, `s3` sea
-lantern/blue terracotta, `s4` emerald block/blue terracotta. Each source block picks its own donor
-or palette independently from **Settings → F7 boss zone paint...**, or with `/paintbrush zones`.
+**P1 · Conveyer** — the moving pillar blocks (coal block, player head) and the phase-1 crusher,
+polished granite, covering that crusher's whole travel range.
+
+**P2 · Pillars** — the phase-2 diorite/polished-diorite pillars, repainted the colour of the array
+(green/yellow/purple/red) they belong to, so you can tell them apart at a glance. Configured per
+(array, block) rule.
+
+**P3 · Devices** — the four swap panels (`s1` sea lantern/obsidian, `s2` redstone lamp lit/unlit,
+`s3` sea lantern/blue terracotta, `s4` emerald block/blue terracotta) and two polished granite
+crushers, **S2 Crusher** and **S3 Crusher**, each covering its own crusher's full travel range.
+
+Each source block picks its own donor or palette independently — the redstone lamp counts as two
+rows, lit and unlit, so a panel can read differently in each state.
+
+---
+
+## Doors
+
+The Catacombs start, wither and blood doors can be repainted and made see-through while they are
+closed, from **Settings → Doors**. Each of the three takes two independent settings:
+
+- **Donor** — the block the door borrows its textures from. Unbound means the door is left alone.
+- **Opacity** — 0–255, in steps of 15. 255 is fully opaque and is the off state; anything lower
+  makes the closed door translucent, and entities behind it render normally once it is.
+
+The two are independent: a door can be made see-through without ever binding a donor, and clearing
+a donor leaves the opacity alone.
+
+Doors move with the run's layout, so unlike the boss zones their positions are found by scanning —
+the door blocks are flood-filled from the cells the room scan already resolved, so a same-material
+block that merely sits inside a door's bounding box is not caught with it. A door stops being
+painted the moment it opens, because its blocks stop existing.
+
+---
+
+## Replace Fluid
+
+Independent of the paint system, since fluids do not bake through the block model path: water can be
+made to render as lava and lava as water, and either can be tinted a chosen colour, from
+**Settings → Replace Fluid**. **Flat** renders the tint as a solid colour instead of multiplying it
+over the resource pack's own water/lava texture — an exact colour match, at the cost of the flow and
+wave texture.
+
+The settings are client-wide by default. **Custom for this boss** overrides them for the active boss
+preset, so one arena can look different from the rest of the game; the override follows the preset,
+not the arena you happen to be standing in.
 
 ---
 
@@ -275,7 +374,9 @@ Everything lives under `config/ap` (`run/config/ap` in the dev client):
 
 ```
 config/ap/
-  settings.json                  world -> preset bindings, room -> type bindings, colours, brush size
+  settings.json                  world/island -> preset bindings, room -> type bindings, boss zone
+                                 and device rules, door donors and opacities, fluid replacement,
+                                 colours, brush size
   block-config/<name>.json       positional paint: { "dimensions": {...}, "rooms": {...} }
   block-type-config/<name>.json  flat  { "minecraft:oak_stairs": "minecraft:diamond_block" }
   palette-config/<name>.json     flat  { "minecraft:stone": 70 }
@@ -305,8 +406,12 @@ deleted.
 ```sh
 ./gradlew build      # jar in build/libs
 ./gradlew test       # pure-logic tests, no Minecraft bootstrap
+./gradlew check      # build + test + checkLwjglVersion
 ./gradlew runClient  # dev client
 ```
+
+`checkLwjglVersion` fails the build if `lwjgl_version` drifts from what Minecraft ships. NanoVG is
+bundled jar-in-jar and has to stay compatible with Minecraft's own LWJGL core.
 
 Minecraft 26.x needs **Java 25**, and Loom checks the JVM Gradle itself runs on rather than the Java
 toolchain. `gradle.properties` pins `org.gradle.java.home` to one machine's JDK — if yours is
@@ -331,16 +436,23 @@ runtime — then Ctrl+Shift+F9 to push a change in.
 ## Source layout
 
 ```
-src/main/java/com/maxisch/mixin/client/   three mixins: step sounds, break sound/particles, scroll
+src/main/java/com/maxisch/
+  mixin/client/          step sounds, break sound/particles, scroll-to-resize, tooltips
+  mixin/client/fluid/    the Replace Fluid hooks: fluid models, fog, camera
+  mixin/client/paint/    the chunk section compiler hook the repaint bakes through
+  client/render/render2d/  the NanoVG bridge and its drawing primitives (Java)
 src/main/kotlin/com/maxisch/
-  client/          entrypoint, keybinds, /paintbrush, key hints
-  client/gui/      the paint screen, block picker, YACL settings
-  client/gui/tab/  the four tabs
-  client/gui/widget/  shared row list and text line
-  client/render/   model wrapper, sprite borrowing, face culling, HUD, selection box
-  paint/           presets, storage, index, codec, undo, settings, paths
-  paint/session/   transient authoring state: brush, area, selection, area scan
-  dungeon/         Catacombs scope: scoreboard read, room scan, room data, coordinate transform
+  client/                entrypoint, keybinds, /ap command, key hints
+  client/gui/            paint screen frame, block picker, colour picker, confirm screen
+  client/gui/tab/        the six paint-menu tabs (Brush, Area, Dungeon, Presets, History, Settings)
+  client/gui/widget/     shared row list and text line widgets
+  client/render/         model wrapper, sprite borrowing, face culling, HUD, selection box
+  paint/                 PaintStorage facade, PaintIndex, history, settings, paths
+  paint/preset/          preset stores and the hand-written JSON codec
+  paint/session/         transient authoring state: brush, area, selection, area scan
+  paint/rule/            AreaRule, BossZones, DeviceColumns, DoorZones, ColumnRules
+  dungeon/detect/        sidebar and tab-list reads: floor, boss, island, room and door scans
+  dungeon/room/          room data store and the room-relative coordinate transform
 ```
 
 `PaintStorage` is the facade everything paints through; it delegates to `PaintSession` (what the
