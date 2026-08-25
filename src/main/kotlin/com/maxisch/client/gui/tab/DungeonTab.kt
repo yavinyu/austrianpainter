@@ -36,7 +36,7 @@ import net.minecraft.world.item.ItemStack
  * - **P1 "Conveyer"** - every zone with [BossZone.p1] set (the coal-block/player-head zone plus
  *   any other zone that happens to live in this phase, e.g. a second, unrelated crusher).
  * - **P2 "Pillars"** - the four moving diorite arrays (`DeviceArray`/[DeviceColumns]).
- * - **P3 "Devices"** - every zone with [BossZone.p1] unset (`BossZone.S1`-`S4`, `CRUSHER`, ...).
+ * - **P3 "Devices"** - every zone with [BossZone.p1] unset (`BossZone.S1`-`S4`, the S2/S3 crushers, ...).
  *
  * Three independent lists side by side rather than one long stacked one - they are three genuinely
  * separate rule sets, each with its own Live toggle and Reset, and a single shared editor row at the
@@ -498,7 +498,8 @@ class DungeonTab(private val screen: PainterScreen) : ApTab("austrianpainter.tab
         BossZone.S2 -> ZONE_S2
         BossZone.S3 -> ZONE_S3
         BossZone.S4 -> ZONE_S4
-        BossZone.CRUSHER -> ZONE_CRUSHER
+        BossZone.CRUSHER_S3 -> ZONE_CRUSHER
+        BossZone.CRUSHER_S2 -> ZONE_CRUSHER
         BossZone.CRUSHER_P1 -> ZONE_CRUSHER
     }
 
