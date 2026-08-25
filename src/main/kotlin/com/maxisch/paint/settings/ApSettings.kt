@@ -427,6 +427,31 @@ object ApSettings {
         return bucket
     }
 
+    /** Zone keys renamed since a settings file was last written, old prefix to new. The trailing
+     *  dot is load-bearing: `crusher_p1.` is a different zone and must not be caught by
+     *  `crusher.`. */
+    private val ZONE_KEY_MIGRATIONS = listOf("crusher." to "s3_crusher.")
+
+    /** Rewrites a rule bucket's keys through [ZONE_KEY_MIGRATIONS], in place of losing every rule
+     *  saved under a zone's old [BossZone.key]. A key already written in the new form wins - the
+     *  migration only fills in what is not there. */
+    private fun migrateZoneKeys(bucket: LinkedHashMap<String, AreaTarget?>): LinkedHashMap<String, AreaTarget?> {
+        val migrated = LinkedHashMap<String, AreaTarget?>()
+        for ((key, target) in bucket) {
+            val renamed = migratedZoneKey(key)
+            if (renamed != key && bucket.containsKey(renamed)) continue
+            migrated[renamed] = target
+        }
+        return migrated
+    }
+
+    /** The rewrite itself, split out from [migrateZoneKeys] so it can be tested without a client. */
+    internal fun migratedZoneKey(key: String): String =
+        ZONE_KEY_MIGRATIONS
+            .firstOrNull { (from, _) -> key.startsWith(from) }
+            ?.let { (from, to) -> to + key.removePrefix(from) }
+            ?: key
+
     fun load() {
         ApPaths.ensureDirectories()
 
@@ -520,12 +545,12 @@ object ApSettings {
                 val byConfig = zones.getAsJsonObject("rulesByConfig")
                 if (byConfig != null) {
                     byConfig.entrySet().forEach { (config, rules) ->
-                        zoneRulesByConfig[config] = parseRuleBucket(rules.asJsonObject, path)
+                        zoneRulesByConfig[config] = migrateZoneKeys(parseRuleBucket(rules.asJsonObject, path))
                     }
                 } else {
                     // Same migration as deviceColumns above.
                     zones.getAsJsonObject("rules")?.let {
-                        zoneRulesByConfig[DEFAULT_PRESET] = parseRuleBucket(it, path)
+                        zoneRulesByConfig[DEFAULT_PRESET] = migrateZoneKeys(parseRuleBucket(it, path))
                     }
                 }
             }
