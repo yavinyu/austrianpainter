@@ -18,6 +18,7 @@ import com.maxisch.paint.rule.BossZones
 import com.maxisch.paint.rule.DeviceArray
 import com.maxisch.paint.rule.DeviceColumns
 import com.maxisch.paint.rule.DeviceSource
+import com.maxisch.paint.rule.DoorZones
 import com.maxisch.paint.preset.PresetCodec
 import com.maxisch.paint.preset.PresetKind
 import com.maxisch.paint.preset.PresetStores
@@ -569,6 +570,11 @@ object ApSettings {
                     bound.get("types")?.asString ?: defaultTypePreset,
                 )
             }
+
+            // Every cached rule layer was built from the values just replaced.
+            DeviceColumns.invalidate()
+            BossZones.invalidate()
+            DoorZones.invalidate()
         }.onFailure { LOGGER.error("Could not read {}", path, it) }
     }
 
@@ -689,14 +695,19 @@ object ApSettings {
             for (id in recentDonors) recent.add(id)
             add("recentDonors", recent)
 
+            // Donor and opacity are independent axes (see [DoorZones]), so each is written on its
+            // own: gating the whole entry on a donor lost an opacity-only door entirely, and
+            // erased a door's opacity the moment its donor was cleared.
             val doors = JsonObject()
             for (kind in DoorKind.entries) {
-                val donor = doorDonors[kind] ?: continue
+                val donor = doorDonors[kind]
+                val opacity = doorOpacities[kind]
+                if (donor == null && opacity == null) continue
                 doors.add(
                     kind.name,
                     JsonObject().apply {
-                        addProperty("donor", BuiltInRegistries.BLOCK.getKey(donor).toString())
-                        addProperty("opacity", doorOpacity(kind))
+                        donor?.let { addProperty("donor", BuiltInRegistries.BLOCK.getKey(it).toString()) }
+                        opacity?.let { addProperty("opacity", it) }
                     },
                 )
             }
