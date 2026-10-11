@@ -124,3 +124,8 @@ runs/
 # Guard against accidental preset-export drops at repo root (see block-config/ under run/config/ap/)
 /*.json
 /logs/2026-08-10-2.log.gz
+
+# Logs
+/logs/
+*.log
+*.log.gz
